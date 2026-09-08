@@ -175,6 +175,8 @@ export interface VentaMostrador {
   id: string;
   ticket_number: string;
   client_name: string;
+  client_dni?: string;
+  client_phone?: string;
   product_id?: string;
   product_name: string;
   quantity: number;

@@ -33,6 +33,17 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { supabase } from '../../lib/supabase/client';
+import {
+  sanitizePhone,
+  sanitizeDni,
+  isValidPhone,
+  isValidDni,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  DNI_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+  DNI_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 export type SalonRoleId = 'barbero' | 'spa' | 'recepcionista';
 
@@ -381,6 +392,14 @@ export const ColaboradoresView: React.FC = () => {
       alert('Por favor complete los nombres, apellidos y DNI.');
       return;
     }
+    if (!isValidDni(newDni.trim())) {
+      alert(DNI_ERROR_MESSAGE);
+      return;
+    }
+    if (newPhone.trim() && !isValidPhone(newPhone.trim())) {
+      alert(PHONE_ERROR_MESSAGE);
+      return;
+    }
 
     setIsSavingNew(true);
     try {
@@ -389,7 +408,7 @@ export const ColaboradoresView: React.FC = () => {
         last_name: newLastName.trim(),
         full_name: `${newFirstName.trim()} ${newLastName.trim()}`,
         dni: newDni.trim(),
-        phone: newPhone.trim() || '+51 900 000 000',
+        phone: newPhone.trim() || '900000000',
         email: newEmail.trim() || `${newFirstName.toLowerCase().replace(/\s+/g, '')}@acicalados.pe`,
         type: newType,
         handles_reception: newType === 'recepcionista' ? true : newHandlesReception,
@@ -430,6 +449,14 @@ export const ColaboradoresView: React.FC = () => {
     if (!isAdmin || !editEmp) return;
     if (!editFirstName.trim() || !editLastName.trim() || !editDni.trim()) {
       alert('Por favor complete los nombres, apellidos y DNI.');
+      return;
+    }
+    if (!isValidDni(editDni.trim())) {
+      alert(DNI_ERROR_MESSAGE);
+      return;
+    }
+    if (editPhone.trim() && !isValidPhone(editPhone.trim())) {
+      alert(PHONE_ERROR_MESSAGE);
       return;
     }
 
@@ -1094,24 +1121,38 @@ export const ColaboradoresView: React.FC = () => {
               {/* DNI, Teléfono & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-neutral-300 font-medium">DNI / Documento *</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-neutral-300 font-medium">DNI / Documento *</label>
+                    <span className="text-[10px] text-neutral-500 font-mono">8 dígitos</span>
+                  </div>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{8}"
+                    maxLength={8}
                     required
-                    placeholder="71234567"
+                    placeholder={DNI_PLACEHOLDER}
                     value={newDni}
-                    onChange={(e) => setNewDni(e.target.value)}
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => setNewDni(sanitizeDni(e.target.value))}
                     className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono focus:border-[#C8A45C]/50"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-neutral-300 font-medium">Teléfono WhatsApp</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-neutral-300 font-medium">Teléfono WhatsApp</label>
+                    <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                  </div>
                   <input
                     type="tel"
-                    placeholder="+51 987 654 321"
+                    inputMode="numeric"
+                    pattern="[0-9]{9}"
+                    maxLength={9}
+                    placeholder={PHONE_PLACEHOLDER}
                     value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]/50"
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => setNewPhone(sanitizePhone(e.target.value))}
+                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono focus:border-[#C8A45C]/50"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1378,22 +1419,38 @@ export const ColaboradoresView: React.FC = () => {
               {/* DNI, Teléfono & Email */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-neutral-300 font-medium">DNI / Documento *</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-neutral-300 font-medium">DNI / Documento *</label>
+                    <span className="text-[10px] text-neutral-500 font-mono">8 dígitos</span>
+                  </div>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{8}"
+                    maxLength={8}
                     required
+                    placeholder={DNI_PLACEHOLDER}
                     value={editDni}
-                    onChange={(e) => setEditDni(e.target.value)}
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => setEditDni(sanitizeDni(e.target.value))}
                     className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono focus:border-[#C8A45C]/50"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-neutral-300 font-medium">Teléfono WhatsApp</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-neutral-300 font-medium">Teléfono WhatsApp</label>
+                    <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                  </div>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{9}"
+                    maxLength={9}
+                    placeholder={PHONE_PLACEHOLDER}
                     value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]/50"
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => setEditPhone(sanitizePhone(e.target.value))}
+                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono focus:border-[#C8A45C]/50"
                   />
                 </div>
                 <div className="space-y-1">

@@ -117,10 +117,16 @@ export const TicketTermicoModal: React.FC = () => {
                   {isBooking ? bookingData?.client_name : ventaData?.client_name}
                 </span>
               </div>
-              {isBooking && bookingData?.client_phone && (
+              {(isBooking ? bookingData?.client_dni : ventaData?.client_dni) && (
+                <div className="flex justify-between">
+                  <span>DNI / DOC:</span>
+                  <span className="font-mono">{isBooking ? bookingData?.client_dni : ventaData?.client_dni}</span>
+                </div>
+              )}
+              {(isBooking ? bookingData?.client_phone : ventaData?.client_phone) && (
                 <div className="flex justify-between">
                   <span>TELÉFONO:</span>
-                  <span>{bookingData.client_phone}</span>
+                  <span className="font-mono">{isBooking ? bookingData?.client_phone : ventaData?.client_phone}</span>
                 </div>
               )}
               {isBooking && bookingData?.start_time && (

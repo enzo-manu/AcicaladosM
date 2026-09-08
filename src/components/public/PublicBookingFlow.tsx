@@ -19,7 +19,19 @@ import {
   Printer,
   ShieldCheck,
   Check,
+  AlertCircle,
 } from 'lucide-react';
+import {
+  sanitizePhone,
+  sanitizeDni,
+  isValidPhone,
+  isValidDni,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  DNI_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+  DNI_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 export const PublicBookingFlow: React.FC = () => {
   const { services, employees, employeeBlocks, addBooking, openTicketModal, currentUser, currentRole, setActiveView, paymentSettings } = useApp();
@@ -39,10 +51,11 @@ export const PublicBookingFlow: React.FC = () => {
 
   // Client Details
   const [clientName, setClientName] = useState<string>(currentUser.role === 'cliente' ? currentUser.name : '');
-  const [clientPhone, setClientPhone] = useState<string>(currentUser.role === 'cliente' ? '+51 988 445 566' : '');
+  const [clientPhone, setClientPhone] = useState<string>(currentUser.role === 'cliente' ? '988445566' : '');
   const [clientEmail, setClientEmail] = useState<string>(currentUser.role === 'cliente' ? currentUser.email : '');
   const [clientDni, setClientDni] = useState<string>('72891402');
   const [notes, setNotes] = useState<string>('');
+  const [bookingFormError, setBookingFormError] = useState<string | null>(null);
 
   // Generated Booking Result
   const [createdBooking, setCreatedBooking] = useState<any | null>(null);
@@ -114,7 +127,21 @@ export const PublicBookingFlow: React.FC = () => {
   }, [employees, employeeBlocks, bookingDate, selectedServices, totalDurationMinutes]);
 
   const handleFinishBooking = () => {
-    if (!clientName.trim() || !clientPhone.trim()) return;
+    setBookingFormError(null);
+    if (!clientName.trim()) {
+      setBookingFormError('Por favor ingresa tu nombre completo.');
+      return;
+    }
+    if (!isValidPhone(clientPhone)) {
+      alert(PHONE_ERROR_MESSAGE);
+      setBookingFormError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+    if (clientDni.trim() && !isValidDni(clientDni)) {
+      alert(DNI_ERROR_MESSAGE);
+      setBookingFormError(DNI_ERROR_MESSAGE);
+      return;
+    }
 
     // Calculate end time
     const [startH, startM] = selectedSlot.split(':').map(Number);
@@ -558,30 +585,50 @@ export const PublicBookingFlow: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-neutral-300">Teléfono WhatsApp *</label>
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-medium text-neutral-300">Teléfono WhatsApp *</label>
+                <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+              </div>
               <div className="relative">
                 <Phone className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{9}"
+                  maxLength={9}
                   required
-                  placeholder="+51 988 445 566"
+                  placeholder={PHONE_PLACEHOLDER}
                   value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white text-xs rounded-xl pl-9 pr-3 py-2.5 outline-none transition"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => {
+                    setClientPhone(sanitizePhone(e.target.value));
+                    if (bookingFormError) setBookingFormError(null);
+                  }}
+                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white text-xs rounded-xl pl-9 pr-3 py-2.5 outline-none transition font-mono"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-neutral-300">DNI / Documento</label>
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-medium text-neutral-300">DNI / Documento</label>
+                <span className="text-[10px] text-neutral-500 font-mono">8 dígitos</span>
+              </div>
               <div className="relative">
                 <FileText className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
                 <input
                   type="text"
-                  placeholder="72891402"
+                  inputMode="numeric"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
+                  placeholder={DNI_PLACEHOLDER}
                   value={clientDni}
-                  onChange={(e) => setClientDni(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white text-xs rounded-xl pl-9 pr-3 py-2.5 outline-none transition"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => {
+                    setClientDni(sanitizeDni(e.target.value));
+                    if (bookingFormError) setBookingFormError(null);
+                  }}
+                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white text-xs rounded-xl pl-9 pr-3 py-2.5 outline-none transition font-mono"
                 />
               </div>
             </div>
@@ -612,6 +659,13 @@ export const PublicBookingFlow: React.FC = () => {
             </div>
           </div>
 
+          {bookingFormError && (
+            <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-2.5 text-xs animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{bookingFormError}</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
             <button
               type="button"
@@ -624,10 +678,10 @@ export const PublicBookingFlow: React.FC = () => {
 
             <button
               type="button"
-              disabled={!clientName.trim() || !clientPhone.trim()}
+              disabled={!clientName.trim() || !isValidPhone(clientPhone) || (Boolean(clientDni.trim()) && !isValidDni(clientDni))}
               onClick={handleFinishBooking}
               className={`px-7 py-3 rounded-xl text-xs font-semibold transition flex items-center gap-2 ${
-                clientName.trim() && clientPhone.trim()
+                clientName.trim() && isValidPhone(clientPhone) && (!clientDni.trim() || isValidDni(clientDni))
                   ? 'bg-gradient-to-r from-[#D4AF37] to-[#C8A45C] text-black shadow-lg hover:from-[#DFCA8D] hover:to-[#D4AF37]'
                   : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
               }`}

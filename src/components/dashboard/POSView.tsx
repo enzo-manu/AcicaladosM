@@ -21,7 +21,20 @@ import {
   X,
   Clock,
   ChevronDown,
+  Phone,
+  FileText,
 } from 'lucide-react';
+import {
+  sanitizePhone,
+  sanitizeDni,
+  isValidPhone,
+  isValidDni,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  DNI_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+  DNI_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 /** Obtiene la fecha y hora actual en la zona horaria oficial de Perú (America/Lima) en formato YYYY-MM-DDTHH:mm */
 function getLimaCurrentDateTimeString(): string {
@@ -64,6 +77,8 @@ export const POSView: React.FC = () => {
 
   // Estados del Formulario de Venta Rápida
   const [clientName, setClientName] = useState<string>('');
+  const [clientDni, setClientDni] = useState<string>('');
+  const [clientPhone, setClientPhone] = useState<string>('');
   const [productDesc, setProductDesc] = useState<string>('');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
@@ -135,6 +150,16 @@ export const POSView: React.FC = () => {
       return;
     }
 
+    if (clientDni.trim() && !isValidDni(clientDni.trim())) {
+      setValidationError(DNI_ERROR_MESSAGE);
+      return;
+    }
+
+    if (clientPhone.trim() && !isValidPhone(clientPhone.trim())) {
+      setValidationError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+
     if (!productDesc.trim()) {
       setValidationError('Por favor, describe el producto o concepto de la venta.');
       return;
@@ -169,6 +194,8 @@ export const POSView: React.FC = () => {
       unit_price_cents: unitPriceCents,
       total_price_cents: totalCents,
       client_name: clientName.trim(),
+      client_dni: clientDni.trim() || undefined,
+      client_phone: clientPhone.trim() || undefined,
       payment_method: paymentMethod,
       created_at: isoDateTimeString,
       notes: selectedProductId ? 'Producto de catálogo' : 'Venta libre mostrador',
@@ -182,6 +209,8 @@ export const POSView: React.FC = () => {
 
     // Limpiar formulario para la siguiente venta rápida
     setClientName('');
+    setClientDni('');
+    setClientPhone('');
     setProductDesc('');
     setSelectedProductId(null);
     setQuantity(1);
@@ -293,34 +322,95 @@ export const POSView: React.FC = () => {
           className="mt-6 space-y-6 text-xs"
         >
           {/* 2. CAMPOS DEL FORMULARIO (FILA SUPERIOR FLEXIBLE) */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-            {/* Nombre del Cliente */}
-            <div className="md:col-span-4 space-y-1.5">
-              <label htmlFor="pos-client-name" className="block text-neutral-300 font-semibold tracking-wide">
-                Nombre del Cliente <span className="text-[#E6C875]">*</span>
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
-                <input
-                  id="pos-client-name"
-                  type="text"
-                  required
-                  placeholder="Ej. Juan Pérez / Mario Vargas"
-                  value={clientName}
-                  onChange={(e) => {
-                    setClientName(e.target.value);
-                    if (validationError) setValidationError(null);
-                  }}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] focus:ring-1 focus:ring-[#C8A45C]/40 text-white rounded-xl pl-9 pr-3 py-2.5 outline-none transition placeholder:text-neutral-600 text-xs"
-                />
+          <div className="space-y-4">
+            {/* Fila 1: Datos del Cliente (Nombre, DNI facturación, Teléfono WhatsApp) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+              {/* Nombre del Cliente */}
+              <div className="md:col-span-6 space-y-1.5">
+                <label htmlFor="pos-client-name" className="block text-neutral-300 font-semibold tracking-wide">
+                  Nombre del Cliente <span className="text-[#E6C875]">*</span>
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
+                  <input
+                    id="pos-client-name"
+                    type="text"
+                    required
+                    placeholder="Ej. Juan Pérez / Mario Vargas"
+                    value={clientName}
+                    onChange={(e) => {
+                      setClientName(e.target.value);
+                      if (validationError) setValidationError(null);
+                    }}
+                    className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] focus:ring-1 focus:ring-[#C8A45C]/40 text-white rounded-xl pl-9 pr-3 py-2.5 outline-none transition placeholder:text-neutral-600 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* DNI / Documento de Facturación */}
+              <div className="md:col-span-3 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label htmlFor="pos-client-dni" className="block text-neutral-300 font-semibold tracking-wide">
+                    DNI / Documento
+                  </label>
+                  <span className="text-[10px] text-neutral-500 font-mono">8 dígitos</span>
+                </div>
+                <div className="relative">
+                  <FileText className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
+                  <input
+                    id="pos-client-dni"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{8}"
+                    maxLength={8}
+                    placeholder={DNI_PLACEHOLDER}
+                    value={clientDni}
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => {
+                      setClientDni(sanitizeDni(e.target.value));
+                      if (validationError) setValidationError(null);
+                    }}
+                    className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] focus:ring-1 focus:ring-[#C8A45C]/40 text-white rounded-xl pl-9 pr-3 py-2.5 outline-none transition placeholder:text-neutral-600 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Teléfono WhatsApp */}
+              <div className="md:col-span-3 space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label htmlFor="pos-client-phone" className="block text-neutral-300 font-semibold tracking-wide">
+                    Teléfono WhatsApp
+                  </label>
+                  <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                </div>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
+                  <input
+                    id="pos-client-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]{9}"
+                    maxLength={9}
+                    placeholder={PHONE_PLACEHOLDER}
+                    value={clientPhone}
+                    onKeyDown={handleNumericKeyDown}
+                    onChange={(e) => {
+                      setClientPhone(sanitizePhone(e.target.value));
+                      if (validationError) setValidationError(null);
+                    }}
+                    className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] focus:ring-1 focus:ring-[#C8A45C]/40 text-white rounded-xl pl-9 pr-3 py-2.5 outline-none transition placeholder:text-neutral-600 text-xs font-mono"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Producto / Descripción con Autocompletado Opcional */}
-            <div className="md:col-span-4 space-y-1.5 relative" ref={dropdownRef}>
-              <label htmlFor="pos-product-desc" className="block text-neutral-300 font-semibold tracking-wide">
-                Producto / Descripción <span className="text-[#E6C875]">*</span>
-              </label>
+            {/* Fila 2: Producto y Montos */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+              {/* Producto / Descripción con Autocompletado Opcional */}
+              <div className="md:col-span-6 space-y-1.5 relative" ref={dropdownRef}>
+                <label htmlFor="pos-product-desc" className="block text-neutral-300 font-semibold tracking-wide">
+                  Producto / Descripción <span className="text-[#E6C875]">*</span>
+                </label>
               <div className="relative">
                 <Package className="w-4 h-4 text-neutral-500 absolute left-3 top-3" />
                 <input
@@ -403,7 +493,7 @@ export const POSView: React.FC = () => {
             </div>
 
             {/* Cantidad (Unidades) con Stepper */}
-            <div className="md:col-span-2 space-y-1.5">
+            <div className="md:col-span-3 space-y-1.5">
               <label className="block text-neutral-300 font-semibold tracking-wide">
                 Cantidad (Unidades) <span className="text-[#E6C875]">*</span>
               </label>
@@ -444,7 +534,7 @@ export const POSView: React.FC = () => {
             </div>
 
             {/* Precio Unitario (S/) */}
-            <div className="md:col-span-2 space-y-1.5">
+            <div className="md:col-span-3 space-y-1.5">
               <label htmlFor="pos-price-input" className="block text-neutral-300 font-semibold tracking-wide">
                 Precio Unitario (S/) <span className="text-[#E6C875]">*</span>
               </label>
@@ -471,6 +561,7 @@ export const POSView: React.FC = () => {
               </p>
             </div>
           </div>
+        </div>
 
           {/* 3. FILA INTERMEDIA */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center pt-2 border-t border-neutral-800/70">

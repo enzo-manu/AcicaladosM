@@ -17,6 +17,13 @@ import {
   Phone,
   ArrowLeft,
 } from 'lucide-react';
+import {
+  sanitizePhone,
+  isValidPhone,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 export const LoginView: React.FC = () => {
   const { setActiveView } = useApp();
@@ -117,6 +124,9 @@ export const LoginView: React.FC = () => {
         }
         if (password.length < 6) {
           throw new Error('La contraseña debe tener al menos 6 caracteres.');
+        }
+        if (phone.trim() && !isValidPhone(phone.trim())) {
+          throw new Error(PHONE_ERROR_MESSAGE);
         }
 
         const { data, error } = await supabase.auth.signUp({
@@ -286,17 +296,24 @@ export const LoginView: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-neutral-300">
-                    Teléfono WhatsApp (Opcional)
-                  </label>
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-medium text-neutral-300">
+                      Teléfono WhatsApp (Opcional)
+                    </label>
+                    <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                  </div>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]{9}"
+                      maxLength={9}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+51 987 654 321"
-                      className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-10 pr-3.5 py-2.5 text-xs outline-none transition-colors"
+                      onKeyDown={handleNumericKeyDown}
+                      onChange={(e) => setPhone(sanitizePhone(e.target.value))}
+                      placeholder={PHONE_PLACEHOLDER}
+                      className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-10 pr-3.5 py-2.5 text-xs outline-none transition-colors font-mono"
                     />
                   </div>
                 </div>

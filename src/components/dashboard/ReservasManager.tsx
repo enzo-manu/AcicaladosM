@@ -22,6 +22,13 @@ import {
   Trash2,
   Pencil,
 } from 'lucide-react';
+import {
+  sanitizePhone,
+  isValidPhone,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 export const ReservasManager: React.FC = () => {
   const {
@@ -203,6 +210,11 @@ export const ReservasManager: React.FC = () => {
     e.preventDefault();
     if (!selectedBookingForEdit) return;
 
+    if (!isValidPhone(editClientPhone.trim())) {
+      alert(PHONE_ERROR_MESSAGE);
+      return;
+    }
+
     await editBooking(selectedBookingForEdit.id, {
       client_name: editClientName.trim(),
       client_phone: editClientPhone.trim(),
@@ -236,9 +248,13 @@ export const ReservasManager: React.FC = () => {
   // Save Settings
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isValidPhone(tempYapePhone.trim())) {
+      alert(PHONE_ERROR_MESSAGE);
+      return;
+    }
     updatePaymentSettings({
       advance_percentage: Number(tempAdvancePct),
-      yape_phone: tempYapePhone,
+      yape_phone: tempYapePhone.trim(),
       yape_holder: tempYapeHolder,
     });
     setIsSettingsModalOpen(false);
@@ -247,7 +263,14 @@ export const ReservasManager: React.FC = () => {
   // Create Manual Booking
   const handleCreateNewBooking = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClientName || !newClientPhone) return;
+    if (!newClientName.trim()) {
+      alert('Por favor ingrese el nombre del cliente.');
+      return;
+    }
+    if (!isValidPhone(newClientPhone.trim())) {
+      alert(PHONE_ERROR_MESSAGE);
+      return;
+    }
 
     const srv = (services || []).find((s) => s.id === newSelectedServiceId) || services?.[0];
     const emp = (employees || []).find((e) => e.id === newEmployeeId) || employees?.[0];
@@ -957,12 +980,20 @@ export const ReservasManager: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-neutral-300 font-medium">Número Telefónico Yape Oficial</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-neutral-300 font-medium">Número Telefónico Yape Oficial</label>
+                  <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                </div>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{9}"
+                  maxLength={9}
                   required
+                  placeholder={PHONE_PLACEHOLDER}
                   value={tempYapePhone}
-                  onChange={(e) => setTempYapePhone(e.target.value)}
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => setTempYapePhone(sanitizePhone(e.target.value))}
                   className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono"
                 />
               </div>
@@ -1030,14 +1061,21 @@ export const ReservasManager: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-neutral-300">Teléfono WhatsApp *</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-neutral-300">Teléfono WhatsApp *</label>
+                  <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{9}"
+                  maxLength={9}
                   required
-                  placeholder="+51 987 654 321"
+                  placeholder={PHONE_PLACEHOLDER}
                   value={newClientPhone}
-                  onChange={(e) => setNewClientPhone(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => setNewClientPhone(sanitizePhone(e.target.value))}
+                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono"
                 />
               </div>
 
@@ -1155,13 +1193,21 @@ export const ReservasManager: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-neutral-300 font-medium">Teléfono WhatsApp *</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-neutral-300 font-medium">Teléfono WhatsApp *</label>
+                  <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+                </div>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{9}"
+                  maxLength={9}
                   required
+                  placeholder={PHONE_PLACEHOLDER}
                   value={editClientPhone}
-                  onChange={(e) => setEditClientPhone(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => setEditClientPhone(sanitizePhone(e.target.value))}
+                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C] font-mono"
                 />
               </div>
 

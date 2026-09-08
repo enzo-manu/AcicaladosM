@@ -3,16 +3,28 @@ import { useApp } from '../../context/AppContext';
 import { formatSoles, formatLimaDate, Booking } from '../../types';
 import { PaymentQRWidget } from '../common/PaymentQRWidget';
 import { User, Phone, FileText, Mail, Calendar, Printer, QrCode, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import {
+  sanitizePhone,
+  sanitizeDni,
+  isValidPhone,
+  isValidDni,
+  handleNumericKeyDown,
+  PHONE_PLACEHOLDER,
+  DNI_PLACEHOLDER,
+  PHONE_ERROR_MESSAGE,
+  DNI_ERROR_MESSAGE,
+} from '../../lib/validators';
 
 export const ClientPortal: React.FC = () => {
   const { currentUser, bookings, openTicketModal } = useApp();
 
   // Profile fields state
   const [name, setName] = useState(currentUser.name);
-  const [phone, setPhone] = useState('+51 988 445 566');
+  const [phone, setPhone] = useState('988445566');
   const [dni, setDni] = useState('72389104');
   const [email, setEmail] = useState(currentUser.email);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Selected booking to pay pending balance
   const [payingBooking, setPayingBooking] = useState<Booking | null>(null);
@@ -28,6 +40,20 @@ export const ClientPortal: React.FC = () => {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    setProfileError(null);
+
+    if (!isValidPhone(phone)) {
+      alert(PHONE_ERROR_MESSAGE);
+      setProfileError(PHONE_ERROR_MESSAGE);
+      return;
+    }
+
+    if (!isValidDni(dni)) {
+      alert(DNI_ERROR_MESSAGE);
+      setProfileError(DNI_ERROR_MESSAGE);
+      return;
+    }
+
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 2500);
   };
@@ -85,27 +111,49 @@ export const ClientPortal: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-neutral-400">Teléfono WhatsApp</label>
+              <div className="flex justify-between items-center">
+                <label className="text-neutral-400">Teléfono WhatsApp</label>
+                <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
+              </div>
               <div className="relative">
                 <Phone className="w-4 h-4 text-neutral-500 absolute left-3 top-2.5" />
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{9}"
+                  maxLength={9}
+                  placeholder={PHONE_PLACEHOLDER}
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-9 pr-3 py-2 outline-none"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => {
+                    setPhone(sanitizePhone(e.target.value));
+                    if (profileError) setProfileError(null);
+                  }}
+                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-9 pr-3 py-2 outline-none font-mono"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-neutral-400">DNI / Documento de Identidad</label>
+              <div className="flex justify-between items-center">
+                <label className="text-neutral-400">DNI / Documento de Identidad</label>
+                <span className="text-[10px] text-neutral-500 font-mono">8 dígitos</span>
+              </div>
               <div className="relative">
                 <FileText className="w-4 h-4 text-neutral-500 absolute left-3 top-2.5" />
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
+                  placeholder={DNI_PLACEHOLDER}
                   value={dni}
-                  onChange={(e) => setDni(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-9 pr-3 py-2 outline-none"
+                  onKeyDown={handleNumericKeyDown}
+                  onChange={(e) => {
+                    setDni(sanitizeDni(e.target.value));
+                    if (profileError) setProfileError(null);
+                  }}
+                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl pl-9 pr-3 py-2 outline-none font-mono"
                 />
               </div>
             </div>
@@ -122,6 +170,13 @@ export const ClientPortal: React.FC = () => {
                 />
               </div>
             </div>
+
+            {profileError && (
+              <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center gap-2 text-xs animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{profileError}</span>
+              </div>
+            )}
 
             <button
               type="submit"
