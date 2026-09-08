@@ -1,12 +1,40 @@
-# Walkthrough: Módulo de Asistencia QR y Módulo Público de Ubicación con Google Maps
+# Walkthrough: Asistencia QR, Ubicación Google Maps y Corrección de Responsividad en Navbar Móvil
 
 Se han implementado y verificado las siguientes soluciones en el proyecto Acicalados Spa & Barber Shop:
-1. **Módulo de Asistencia QR (`/dashboard/asistencia`)**: control de puntualidad, tolerancias y horas extra.
-2. **Módulo Público de Ubicación (`/ubicacion`)**: integración real y responsiva de Google Maps para la sede oficial de Pichari.
+1. **Corrección de Desbordamiento Horizontal y Navbar Móvil**: eliminación de scroll lateral en pantallas desde 360px y despliegue del menú hamburguesa completo.
+2. **Módulo de Asistencia QR (`/dashboard/asistencia`)**: control de puntualidad, tolerancias y horas extra.
+3. **Módulo Público de Ubicación (`/ubicacion`)**: integración real y responsiva de Google Maps para la sede oficial de Pichari.
 
 ---
 
-## 1. Módulo Público de Ubicación con Google Maps Real ([`PublicLocation.tsx`](file:///d:/SistemasMANU/AcicaladosM/src/components/public/PublicLocation.tsx))
+## 1. Corrección de Desbordamiento y Optimización del Navbar Móvil ([`Navbar.tsx`](file:///d:/SistemasMANU/AcicaladosM/src/components/common/Navbar.tsx))
+
+### A. Diagnóstico y Corrección del Desbordamiento:
+- **Causa**: En resoluciones móviles (< 400px), el ancho acumulado del logotipo (`shrink-0`), separadores, accesos rápidos de búsqueda, carrito y perfil sumaba más de 400px, excediendo los 360px de la pantalla y empujando el botón de las 3 barras (menú hamburguesa) fuera del viewport.
+- **Ajustes aplicados**:
+  - Contenedor flexible con `w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20`.
+  - Logotipo flexible y adaptable (`min-w-0 shrink`) con tamaño de imagen `h-8 sm:h-11`, separador compacto `h-6 sm:h-8` y textos proporcionales que no saturan el espacio.
+  - Ocultamiento de separadores estáticos innecesarios en pantallas pequeñas (`hidden sm:block`).
+  - Accesos rápidos con dimensiones optimizadas (`p-1.5 sm:p-2`) y espaciados calculados (`gap-1 sm:gap-2.5 lg:gap-4`).
+  - **Botón hamburguesa (3 barras)** perfectamente visible, alineado y con margen derecho seguro sin provocar desplazamiento horizontal.
+  - Reglas globales añadidas a [`index.css`](file:///d:/SistemasMANU/AcicaladosM/src/index.css) y [`App.tsx`](file:///d:/SistemasMANU/AcicaladosM/src/App.tsx) (`overflow-x: hidden; max-width: 100vw; width: 100%`) para garantizar que ningún elemento genere scroll lateral.
+
+### B. Menú Desplegable Móvil Completo:
+- **Estructura completa de rutas**:
+  - 🏠 **Inicio** (`/`)
+  - ✂️ **Servicios** (`/servicios`)
+  - ✨ **Vestuario** (`/vestuario`)
+  - 🛍️ **Productos** (`/productos`)
+  - 📍 **Ubicación** (`/ubicacion`)
+  - 📅 **Mis Citas / Reservas** (`/mi-cuenta`)
+  - 👤 **Mi Cuenta** (`/mi-cuenta`)
+  - 📊 **Panel de Control** (`/dashboard` - destacado con badge Staff para rol Administrador o Recepción)
+  - 🚪 **Cerrar Sesión** (para usuarios autenticados) / **Iniciar Sesión o Registro** (para invitados)
+  - ⚡ Accesos rápidos en la base del menú para **Buscar** y **Ver Carrito**.
+- **Comportamiento interactivo**:
+  - Se cierra automáticamente al hacer clic en cualquier enlace de navegación (`handleNavClick`).
+  - Se cierra al hacer clic fuera del panel (backdrop oscuro con desenfoque).
+  - Incluye botón visible de cierre (X) en la esquina superior derecha.
 
 Se implementó la pantalla pública en `/ubicacion` con la identidad oscura de lujo y los datos oficiales de la sede:
 

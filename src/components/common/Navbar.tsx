@@ -9,7 +9,11 @@ import {
   LogOut, 
   LayoutDashboard, 
   LogIn,
-  X
+  X,
+  Home,
+  Scissors,
+  Sparkles,
+  MapPin,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -71,11 +75,11 @@ export const Navbar: React.FC = () => {
 
   // Exact order required: Inicio | Servicios | Vestuario | Productos | Ubicación
   const navLinks = [
-    { view: '/', label: 'Inicio' },
-    { view: '/servicios', label: 'Servicios' },
-    { view: '/vestuario', label: 'Vestuario' },
-    { view: '/productos', label: 'Productos' },
-    { view: '/ubicacion', label: 'Ubicación' },
+    { view: '/', label: 'Inicio', icon: <Home className="w-4 h-4" /> },
+    { view: '/servicios', label: 'Servicios', icon: <Scissors className="w-4 h-4" /> },
+    { view: '/vestuario', label: 'Vestuario', icon: <Sparkles className="w-4 h-4" /> },
+    { view: '/productos', label: 'Productos', icon: <ShoppingBag className="w-4 h-4" /> },
+    { view: '/ubicacion', label: 'Ubicación', icon: <MapPin className="w-4 h-4" /> },
   ];
 
   const handleNavClick = (view: string) => {
@@ -118,31 +122,31 @@ export const Navbar: React.FC = () => {
     : searchItems;
 
   return (
-    <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-[#C8A45C]/30 shadow-[0_4px_25px_rgba(0,0,0,0.85)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 sm:h-20 flex items-center justify-between">
+    <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-[#C8A45C]/30 shadow-[0_4px_25px_rgba(0,0,0,0.85)] w-full">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between w-full">
         
         {/* 1. LOGOTIPO (Extremo izquierdo) */}
-        <div className="flex items-center shrink-0">
+        <div className="flex items-center min-w-0 shrink">
           <button
             type="button"
             onClick={() => handleNavClick('/')}
-            className="flex items-center group cursor-pointer focus:outline-none"
+            className="flex items-center group cursor-pointer focus:outline-none min-w-0"
             aria-label="Acicalados - Inicio"
           >
             <img
               src="/LogoAcicalados.svg"
               alt="Logo Acicalados"
-              className="h-10 sm:h-12 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+              className="h-8 sm:h-11 w-auto object-contain transition-transform duration-200 group-hover:scale-105 shrink-0"
             />
-            <div className="h-8 w-[1px] bg-[#C8A45C]/35 mx-3 sm:mx-4" />
-            <div className="flex flex-col justify-center text-left select-none">
+            <div className="h-6 sm:h-8 w-[1px] bg-[#C8A45C]/35 mx-1.5 sm:mx-3 shrink-0" />
+            <div className="flex flex-col justify-center text-left select-none min-w-0">
               <span
-                className="font-serif-luxury font-bold text-base sm:text-lg lg:text-xl tracking-[0.2em] text-[#C8A45C] group-hover:text-[#EBDBB2] transition-colors leading-none"
+                className="font-serif-luxury font-bold text-xs sm:text-base lg:text-xl tracking-[0.14em] sm:tracking-[0.2em] text-[#C8A45C] group-hover:text-[#EBDBB2] transition-colors leading-none truncate"
               >
                 ACICALADOS
               </span>
               <span
-                className="tracking-[0.28em] text-[9px] sm:text-[10px] text-[#C8A45C]/80 font-semibold leading-none mt-1"
+                className="tracking-[0.18em] sm:tracking-[0.28em] text-[7px] sm:text-[10px] text-[#C8A45C]/80 font-semibold leading-none mt-0.5 truncate hidden xs:block"
               >
                 DISEÑO &amp; CALIDAD
               </span>
@@ -150,9 +154,7 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* 2. MENÚ DE NAVEGACIÓN CENTRAL */}
-        {/* Orden exacto: Inicio | Servicios | Vestuario | Productos | Ubicación */}
-        {/* Subrayado dorado horizontal inferior */}
+        {/* 2. MENÚ DE NAVEGACIÓN CENTRAL (Desktop) */}
         <nav className="hidden lg:flex items-center gap-6 xl:gap-8">
           {navLinks.map((item) => {
             const isActive =
@@ -178,71 +180,68 @@ export const Navbar: React.FC = () => {
           })}
         </nav>
 
-        {/* 3. ÁREA DERECHA (Acciones y Perfil del Cliente) */}
-        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4 shrink-0">
+        {/* 3. ÁREA DERECHA (Acciones, Perfil y Hamburguesa Móvil) */}
+        <div className="flex items-center gap-1 sm:gap-2.5 lg:gap-4 shrink-0">
           
           {/* Ícono de búsqueda (lupa) */}
           <button
             type="button"
             onClick={() => setSearchModalOpen(true)}
-            className="p-2 rounded-lg text-neutral-300 hover:text-[#C8A45C] hover:bg-[#C8A45C]/10 transition-all duration-200 cursor-pointer flex items-center justify-center focus:outline-none"
+            className="p-1.5 sm:p-2 rounded-lg text-neutral-300 hover:text-[#C8A45C] hover:bg-[#C8A45C]/10 transition-colors cursor-pointer flex items-center justify-center focus:outline-none"
             title="Buscar servicios, vestuario o productos (Ctrl+K)"
             aria-label="Buscar"
           >
-            <Search className="w-5 h-5" />
+            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
-          {/* Barra vertical separadora tenue */}
-          <div className="h-6 w-[1px] bg-[#C8A45C]/30 mx-0.5 sm:mx-1" />
+          {/* Separador vertical sólo visible en tablet y desktop */}
+          <div className="hidden sm:block h-5 sm:h-6 w-[1px] bg-[#C8A45C]/30 mx-0.5" />
 
-          {/* Ícono de carrito de compras junto al texto "Carrito" */}
+          {/* Ícono de carrito de compras */}
           <button
             id="cart-drawer-trigger-btn"
             type="button"
             onClick={() => setIsCartOpen(true)}
-            className="group inline-flex items-center justify-center h-9 sm:h-[38px] px-2.5 sm:px-3 py-1.5 rounded-full hover:bg-[#C8A45C]/15 text-neutral-200 hover:text-[#C8A45C] transition-all duration-200 text-sm font-medium cursor-pointer shrink-0 gap-1.5 sm:gap-2 relative focus:outline-none"
+            className="group inline-flex items-center justify-center h-8 sm:h-[38px] p-1.5 sm:px-3 sm:py-1.5 rounded-full hover:bg-[#C8A45C]/15 text-neutral-200 hover:text-[#C8A45C] transition-all duration-200 text-xs sm:text-sm font-medium cursor-pointer shrink-0 gap-1 sm:gap-2 relative focus:outline-none"
             title="Abrir Carrito de Compras"
             aria-label="Abrir Carrito"
           >
             <ShoppingBag className="w-4 h-4 text-neutral-200 group-hover:text-[#C8A45C] transition-colors shrink-0" />
-            <span className="hidden sm:inline tracking-wide select-none leading-none text-xs sm:text-sm">
+            <span className="hidden md:inline tracking-wide select-none leading-none">
               Carrito
             </span>
             {cartCount > 0 && (
-              <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#C8A45C] text-black font-extrabold text-[10px] sm:text-xs flex items-center justify-center shrink-0 shadow-inner leading-none">
+              <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#C8A45C] text-black font-extrabold text-[9px] sm:text-xs flex items-center justify-center shrink-0 shadow-inner leading-none">
                 {cartCount}
               </span>
             )}
           </button>
 
-          {/* Perfil de usuario con ícono de silueta, nombre del cliente y flecha desplegable hacia abajo */}
+          {/* Perfil de usuario */}
           <div className="relative inline-flex items-center" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-              className="group inline-flex items-center justify-center h-9 sm:h-[38px] px-2 sm:px-3 py-1.5 rounded-full hover:bg-[#C8A45C]/15 text-neutral-200 hover:text-[#C8A45C] transition-all duration-200 text-sm font-medium cursor-pointer shrink-0 gap-1.5 sm:gap-2 border border-transparent hover:border-[#C8A45C]/30 focus:outline-none"
+              className="group inline-flex items-center justify-center h-8 sm:h-[38px] p-1.5 sm:px-2.5 sm:py-1.5 rounded-full hover:bg-[#C8A45C]/15 text-neutral-200 hover:text-[#C8A45C] transition-all duration-200 text-xs sm:text-sm font-medium cursor-pointer shrink-0 gap-1 sm:gap-2 border border-transparent hover:border-[#C8A45C]/30 focus:outline-none"
               aria-expanded={userDropdownOpen}
               aria-haspopup="true"
               title="Mi Cuenta"
               aria-label="Mi Cuenta"
             >
-              {/* Ícono de silueta */}
               <User className="w-4 h-4 text-[#C8A45C] group-hover:text-[#EBDBB2] transition-colors shrink-0" />
 
-              {/* Nombre del cliente autenticado */}
-              <span className="hidden md:inline max-w-[130px] truncate leading-none select-none text-neutral-200 group-hover:text-[#EBDBB2] transition-colors font-medium text-xs sm:text-sm">
+              <span className="hidden md:inline max-w-[110px] truncate leading-none select-none text-neutral-200 group-hover:text-[#EBDBB2] transition-colors font-medium">
                 {clientName}
               </span>
 
-              {/* Flecha desplegable hacia abajo */}
               <ChevronDown
-                className={`w-3.5 h-3.5 text-[#C8A45C]/70 group-hover:text-[#C8A45C] transition-transform duration-200 shrink-0 ${
+                className={`hidden sm:block w-3.5 h-3.5 text-[#C8A45C]/70 group-hover:text-[#C8A45C] transition-transform duration-200 shrink-0 ${
                   userDropdownOpen ? 'rotate-180' : ''
                 }`}
               />
             </button>
 
-            {/* Menú Desplegable */}
+            {/* Menú Desplegable de Usuario (Desktop y Móvil) */}
             {userDropdownOpen && (
               <div className="absolute right-0 top-full mt-2 w-52 sm:w-56 bg-[#111111] border border-[#C8A45C]/40 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.9)] py-2 z-50 animate-fadeIn backdrop-blur-md">
                 {!isAuthenticated ? (
@@ -280,7 +279,7 @@ export const Navbar: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Administrador / Recepcionista: Panel de Control destacado */}
+                    {/* Administrador / Recepcionista: Panel de Control */}
                     {isStaffRole && (
                       <button
                         type="button"
@@ -329,27 +328,28 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* Botón de menú hamburguesa al extremo derecho para la vista móvil */}
+          {/* Botón de Menú Hamburguesa (3 barras) */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden p-2 rounded-lg text-[#C8A45C] hover:text-[#EBDBB2] hover:bg-[#C8A45C]/10 transition-colors flex items-center justify-center cursor-pointer shrink-0 focus:outline-none"
+            className="lg:hidden p-1.5 sm:p-2 rounded-xl text-[#C8A45C] hover:text-[#EBDBB2] hover:bg-[#C8A45C]/15 border border-[#C8A45C]/35 transition-all flex items-center justify-center cursor-pointer shrink-0 focus:outline-none active:scale-95 ml-0.5 sm:ml-1"
             title="Abrir Menú de Navegación"
-            aria-label="Abrir Menú"
+            aria-label="Abrir Menú de Navegación"
           >
             <svg
-              width="24"
-              height="24"
+              width="20"
+              height="20"
               viewBox="0 0 24 24"
               fill="none"
               stroke="#C8A45C"
-              strokeWidth="2.2"
+              strokeWidth="2.3"
               strokeLinecap="round"
               strokeLinejoin="round"
+              className="shrink-0"
             >
-              <line x1="3" y1="6" x2="21" y2="6" stroke="#C8A45C" strokeWidth="2.2" strokeLinecap="round" />
-              <line x1="3" y1="12" x2="21" y2="12" stroke="#C8A45C" strokeWidth="2.2" strokeLinecap="round" />
-              <line x1="3" y1="18" x2="21" y2="18" stroke="#C8A45C" strokeWidth="2.2" strokeLinecap="round" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
         </div>
@@ -422,113 +422,213 @@ export const Navbar: React.FC = () => {
         </div>
       )}
 
-      {/* DRAWER RESPONSIVO PARA DISPOSITIVOS MÓVILES */}
+      {/* DRAWER RESPONSIVO COMPLETO PARA DISPOSITIVOS MÓVILES */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity duration-300 flex justify-end"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md transition-opacity duration-300 flex justify-end"
           onClick={() => setMobileMenuOpen(false)}
         >
           <div
-            className="w-full max-w-[300px] sm:max-w-[330px] h-full bg-black border-l border-[#C8A45C]/35 shadow-[-15px_0_40px_rgba(0,0,0,0.95)] p-6 sm:p-7 flex flex-col justify-between items-center text-center overflow-y-auto"
+            className="w-[86vw] max-w-[340px] h-full bg-[#0E0E0E] border-l border-[#C8A45C]/35 shadow-[-20px_0_50px_rgba(0,0,0,0.95)] p-5 sm:p-6 flex flex-col justify-between overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top Close Button */}
-            <div className="w-full flex justify-between items-center mb-4">
-              <span className="text-xs text-[#C8A45C] font-semibold tracking-widest uppercase font-serif-luxury">
-                Menú
-              </span>
-              <button
-                type="button"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-9 h-9 rounded-lg border border-[#C8A45C]/40 text-[#C8A45C] hover:text-[#EBDBB2] hover:border-[#C8A45C] hover:bg-[#C8A45C]/15 flex items-center justify-center transition cursor-pointer text-lg font-bold"
-                aria-label="Cerrar Menú"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+            {/* Top: Header with Brand & Close Button */}
+            <div className="space-y-4">
+              <div className="w-full flex items-center justify-between pb-3.5 border-b border-[#C8A45C]/25">
+                <div className="flex items-center gap-2">
+                  <img src="/LogoAcicalados.svg" alt="Acicalados" className="h-7 w-auto object-contain" />
+                  <span className="font-serif-luxury font-bold text-sm tracking-[0.16em] text-[#C8A45C]">
+                    ACICALADOS
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-8 h-8 rounded-xl border border-[#C8A45C]/35 text-[#C8A45C] hover:text-white hover:border-[#C8A45C] hover:bg-[#C8A45C]/15 flex items-center justify-center transition cursor-pointer"
+                  aria-label="Cerrar Menú"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-            {/* Links de Navegación Vertical Centrados */}
-            <nav className="flex flex-col items-center justify-center gap-5 my-auto text-center w-full">
-              {navLinks.map((item) => {
-                const isActive =
-                  item.view === '/'
-                    ? activeView === '/'
-                    : item.view === '/productos'
-                    ? activeView === '/productos' || activeView === '/tienda'
-                    : activeView === item.view || activeView.startsWith(item.view + '/');
-
-                return (
-                  <div key={item.label} className="w-full flex justify-center text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick(item.view)}
-                      className={`text-xl font-serif-luxury tracking-wider transition-all duration-200 relative pb-1 inline-block text-center cursor-pointer ${
-                        isActive
-                          ? "text-[#C8A45C] font-bold after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:mx-auto after:w-full after:h-[2px] after:bg-[#C8A45C] after:rounded-full after:shadow-[0_0_12px_rgba(200,164,92,0.8)]"
-                          : "text-[#C8A45C]/60 hover:text-[#C8A45C] font-medium"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
+              {/* User Profile Card inside Drawer */}
+              <div className="p-3 rounded-2xl bg-[#141414] border border-[#C8A45C]/25 flex items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/35 text-[#E6C875] flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4" />
                   </div>
-                );
-              })}
+                  <div className="min-w-0 text-left">
+                    <span className="text-[10px] text-neutral-400 uppercase tracking-widest block font-semibold leading-tight">
+                      {isStaffRole
+                        ? currentRole === 'admin'
+                          ? 'Administrador'
+                          : 'Recepción'
+                        : isAuthenticated
+                        ? 'Cliente'
+                        : 'Bienvenido'}
+                    </span>
+                    <span className="text-xs font-bold text-white block truncate leading-tight mt-0.5">
+                      {clientName}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Acciones de Cuenta / Citas en Móvil */}
-              <div className="w-full flex flex-col items-center gap-3.5 pt-4 border-t border-[#C8A45C]/20 mt-2 text-center">
                 {!isAuthenticated ? (
                   <button
                     type="button"
                     onClick={() => handleNavClick('/auth/login')}
-                    className="text-base font-serif-luxury tracking-wider text-[#C8A45C] font-bold hover:text-white transition-colors flex items-center gap-2"
+                    className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#D4AF37] to-[#C8A45C] text-black font-bold text-[10px] uppercase tracking-wider shrink-0 hover:brightness-110 transition shadow"
                   >
-                    <LogIn className="w-4 h-4" />
-                    <span>Iniciar Sesión / Registro</span>
+                    Ingresar
                   </button>
                 ) : (
-                  <>
-                    {isStaffRole && (
+                  <span className="text-[9px] uppercase font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full shrink-0">
+                    Online
+                  </span>
+                )}
+              </div>
+
+              {/* Secciones Principales de Navegación */}
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-[#C8A45C]/80 px-2 py-1 block text-left">
+                  Navegación Principal
+                </span>
+                <nav className="space-y-1 text-left w-full">
+                  {navLinks.map((item) => {
+                    const isActive =
+                      item.view === '/'
+                        ? activeView === '/'
+                        : item.view === '/productos'
+                        ? activeView === '/productos' || activeView === '/tienda'
+                        : activeView === item.view || activeView.startsWith(item.view + '/');
+
+                    return (
                       <button
+                        key={item.view}
                         type="button"
-                        onClick={() => handleNavClick('/dashboard')}
-                        className="w-full py-2 px-4 rounded-xl text-base font-serif-luxury tracking-wider text-[#C8A45C] bg-[#C8A45C]/15 border border-[#C8A45C]/40 hover:text-white transition-colors flex items-center justify-center gap-2 font-bold"
+                        onClick={() => handleNavClick(item.view)}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition cursor-pointer ${
+                          isActive
+                            ? 'bg-[#C8A45C]/20 text-[#E6C875] border border-[#C8A45C]/50 font-bold shadow-sm'
+                            : 'text-neutral-300 hover:text-white hover:bg-neutral-900 border border-transparent font-medium'
+                        }`}
                       >
+                        <div className="flex items-center gap-3">
+                          <span className={isActive ? 'text-[#E6C875]' : 'text-[#C8A45C]'}>
+                            {item.icon}
+                          </span>
+                          <span>{item.label}</span>
+                        </div>
+                        {isActive && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#E6C875] shadow-[0_0_8px_#E6C875]" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Sección: Mi Cuenta, Citas y Gestión */}
+              <div className="space-y-1 pt-3 border-t border-[#C8A45C]/20">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-[#C8A45C]/80 px-2 py-1 block text-left">
+                  Mi Cuenta &amp; Gestión
+                </span>
+
+                <div className="space-y-1 text-left w-full">
+                  {/* Panel de Control Staff (Admin / Recepción) */}
+                  {isStaffRole && (
+                    <button
+                      type="button"
+                      onClick={() => handleNavClick('/dashboard')}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#C8A45C]/15 border border-[#C8A45C]/40 text-[#E6C875] hover:bg-[#C8A45C]/25 transition cursor-pointer mb-1 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
                         <LayoutDashboard className="w-4 h-4 text-[#C8A45C]" />
                         <span>Panel de Control</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick('/mi-cuenta')}
-                      className="text-base font-serif-luxury tracking-wider text-neutral-300 hover:text-[#C8A45C] transition-colors"
-                    >
-                      Mis Citas / Mis Reservas
+                      </div>
+                      <span className="text-[9px] uppercase tracking-wider bg-[#C8A45C] text-black px-2 py-0.5 rounded font-extrabold">
+                        Staff
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick('/mi-cuenta')}
-                      className="text-base font-serif-luxury tracking-wider text-neutral-300 hover:text-[#C8A45C] transition-colors"
-                    >
-                      Mi Cuenta
-                    </button>
+                  )}
 
+                  {/* Mis Citas / Mis Reservas */}
+                  <button
+                    type="button"
+                    onClick={() => handleNavClick(isAuthenticated ? '/mi-cuenta' : '/auth/login')}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-300 hover:text-white hover:bg-neutral-900 transition cursor-pointer font-medium"
+                  >
+                    <Calendar className="w-4 h-4 text-[#C8A45C]" />
+                    <span>Mis Citas / Reservas</span>
+                  </button>
+
+                  {/* Mi Cuenta */}
+                  <button
+                    type="button"
+                    onClick={() => handleNavClick(isAuthenticated ? '/mi-cuenta' : '/auth/login')}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-300 hover:text-white hover:bg-neutral-900 transition cursor-pointer font-medium"
+                  >
+                    <User className="w-4 h-4 text-[#C8A45C]" />
+                    <span>Mi Cuenta</span>
+                  </button>
+
+                  {/* Iniciar Sesión / Cerrar Sesión */}
+                  {isAuthenticated ? (
                     <button
                       type="button"
                       onClick={handleSignOut}
-                      className="text-base font-serif-luxury tracking-wider text-red-400 hover:text-red-300 transition-colors cursor-pointer mt-1"
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer font-medium"
                     >
-                      Cerrar Sesión
+                      <LogOut className="w-4 h-4 text-red-400" />
+                      <span>Cerrar Sesión</span>
                     </button>
-                  </>
-                )}
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleNavClick('/auth/login')}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-[#C8A45C] font-semibold hover:text-white hover:bg-[#C8A45C]/15 transition cursor-pointer"
+                    >
+                      <LogIn className="w-4 h-4 text-[#C8A45C]" />
+                      <span>Iniciar Sesión / Registro</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </nav>
 
-            {/* Bottom Slogan */}
-            <div className="w-full pt-6 border-t border-[#C8A45C]/15 text-center">
-              <span className="text-[10px] text-[#C8A45C]/40 tracking-[0.28em] font-semibold block">
-                ACICALADOS · DISEÑO &amp; CALIDAD
+              {/* Atajos Rápidos en Móvil: Buscar & Carrito */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#C8A45C]/20">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setSearchModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 transition"
+                >
+                  <Search className="w-3.5 h-3.5 text-[#C8A45C]" />
+                  <span>Buscar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setIsCartOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 transition relative"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 text-[#C8A45C]" />
+                  <span>Carrito ({cartCount})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Slogan & City */}
+            <div className="w-full pt-4 pb-1 border-t border-[#C8A45C]/15 text-center space-y-0.5">
+              <span className="text-[10px] text-[#C8A45C]/60 tracking-[0.2em] font-semibold block uppercase">
+                Spa Acicalados Barber Shop
+              </span>
+              <span className="text-[9px] text-neutral-500 block font-mono">
+                Sede Pichari · Cusco, Perú
               </span>
             </div>
           </div>

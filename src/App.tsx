@@ -49,7 +49,7 @@ const AppContent: React.FC = () => {
   }, [isDashboard, isPublicRole, setActiveView]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black">
+    <div className="min-h-screen bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full overflow-x-hidden">
       {/* Global Thermal Ticket Modal */}
       <TicketTermicoModal />
 
@@ -108,7 +108,7 @@ const AppContent: React.FC = () => {
         </div>
       ) : (
         // PUBLIC LAYOUT
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col w-full max-w-full overflow-x-hidden">
           <Navbar />
           <main className="flex-1">
             {activeView === '/' && <PublicLanding />}

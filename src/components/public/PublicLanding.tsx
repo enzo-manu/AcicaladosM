@@ -43,7 +43,7 @@ export const PublicLanding: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-16 pb-20">
+    <div className="space-y-16 pb-20 w-full max-w-full overflow-x-hidden">
       {/* Hero Section */}
       <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-20 bg-gradient-to-b from-[#0F0E0C] via-[#0A0A0A] to-[#0A0A0A] border-b border-[#C8A45C]/15">
         {/* Subtle Background Glow */}
@@ -52,7 +52,7 @@ export const PublicLanding: React.FC = () => {
         <div className="max-w-4xl mx-auto text-center relative z-10 space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#181611] border border-[#C8A45C]/35 text-xs text-[#E6C875] font-medium shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#C8A45C]" />
-            <span>Experiencia de Cuidado Personal & Estilo en Lima</span>
+            <span>Experiencia de Cuidado Personal & Estilo en Pichari</span>
           </div>
 
           <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.15]">
@@ -269,7 +269,7 @@ export const PublicLanding: React.FC = () => {
           <div className="space-y-2 text-center md:text-left">
             <span className="inline-flex items-center gap-1.5 text-xs text-[#E6C875] font-semibold">
               <MapPin className="w-4 h-4" />
-              <span>San Borja, Lima - Zona Horaria America/Lima</span>
+              <span>Pichari, Cusco - Zona Horaria America/Lima</span>
             </span>
             <h3 className="font-serif-luxury text-2xl font-bold text-white">
               Horario Continuado de Lunes a Domingo
