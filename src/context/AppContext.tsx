@@ -13,6 +13,7 @@ import {
   EmployeeAttendance,
   PaymentSettings,
   BonusSettings,
+  AttendanceSettings,
   CartItem,
   BookingStatus,
   WardrobeStatus,
@@ -29,6 +30,7 @@ import {
   INITIAL_ATTENDANCE,
   INITIAL_PAYMENT_SETTINGS,
   INITIAL_BONUS_SETTINGS,
+  INITIAL_ATTENDANCE_SETTINGS,
   getTodayDateString,
 } from '../data/initialData';
 import { sanitizePhone, sanitizeDni } from '../lib/validators';
@@ -64,6 +66,7 @@ interface AppContextType {
   attendanceRecords: EmployeeAttendance[];
   paymentSettings: PaymentSettings;
   bonusSettings: BonusSettings;
+  attendanceSettings: AttendanceSettings;
 
   // Cart
   cart: CartItem[];
@@ -127,7 +130,15 @@ interface AppContextType {
     document_url?: string;
   }) => Promise<boolean>;
   deleteEmployeeBlock: (blockId: string) => Promise<boolean>;
-  scanAttendanceQR: (qrCode: string) => { success: boolean; message: string; employee?: Employee; type?: 'check_in' | 'check_out' };
+  scanAttendanceQR: (qrCode: string) => {
+    success: boolean;
+    message: string;
+    employee?: Employee;
+    type?: 'check_in' | 'check_out';
+    record?: EmployeeAttendance;
+    punctuality?: 'puntual' | 'tardanza' | 'horas_extra';
+    minutes?: number;
+  };
   registerAttendancePunch: (employeeId: string, punchType: 'check_in' | 'check_out') => void;
   manualAdjustBonus: (attendanceId: string, newBonusMinutes: number, reason: string) => void;
   submitJustification: (attendanceId: string, note: string, docUrl?: string) => void;
@@ -135,6 +146,7 @@ interface AppContextType {
   // Settings
   updatePaymentSettings: (settings: Partial<PaymentSettings>) => void;
   updateBonusSettings: (settings: Partial<BonusSettings>) => void;
+  updateAttendanceSettings: (settings: Partial<AttendanceSettings>) => Promise<boolean>;
 
   // Catalog CRUD
   addService: (srv: Omit<Service, 'id'>) => Promise<boolean>;
@@ -234,6 +246,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [attendance, setAttendance] = useState<EmployeeAttendance[]>(INITIAL_ATTENDANCE);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(INITIAL_PAYMENT_SETTINGS);
   const [bonusSettings, setBonusSettings] = useState<BonusSettings>(INITIAL_BONUS_SETTINGS);
+  const [attendanceSettings, setAttendanceSettings] = useState<AttendanceSettings>(INITIAL_ATTENDANCE_SETTINGS);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [activeTicket, setActiveTicket] = useState<{ type: 'booking' | 'venta'; data: Booking | VentaMostrador } | null>(null);
@@ -482,6 +495,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
 
+      // 10. Configuración de Asistencia
+      const { data: dbAttSettings } = await supabase
+        .from('attendance_settings')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
+      if (dbAttSettings) {
+        setAttendanceSettings({
+          id: dbAttSettings.id,
+          shift_entry_time: dbAttSettings.shift_entry_time || '09:00',
+          shift_exit_time: dbAttSettings.shift_exit_time || '19:00',
+          entry_tolerance_minutes: Number(dbAttSettings.entry_tolerance_minutes ?? 15),
+          exit_tolerance_minutes: Number(dbAttSettings.exit_tolerance_minutes ?? 15),
+        });
+      }
+
+      // 11. Registros de Asistencia
+      const { data: dbAttendances } = await supabase
+        .from('employee_attendances')
+        .select('*')
+        .order('date', { ascending: false });
+      if (dbAttendances && dbAttendances.length > 0) {
+        setAttendance(
+          dbAttendances.map((a: any) => {
+            const empName = empMap.get(a.employee_id) || 'Colaborador';
+            const rawIn = a.check_in || '';
+            const rawOut = a.check_out || '';
+            const checkInFormatted = rawIn.includes('T')
+              ? new Date(rawIn).toLocaleTimeString('es-PE', {
+                  timeZone: 'America/Lima',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })
+              : rawIn.substring(0, 5) || '09:00';
+            const checkOutFormatted = rawOut
+              ? (rawOut.includes('T')
+                  ? new Date(rawOut).toLocaleTimeString('es-PE', {
+                      timeZone: 'America/Lima',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })
+                  : rawOut.substring(0, 5))
+              : null;
+
+            return {
+              id: a.id,
+              employee_id: a.employee_id,
+              employee_name: empName,
+              employee_type: (a.employee_type || 'barberia') as any,
+              date: a.date,
+              check_in: checkInFormatted,
+              check_out: checkOutFormatted,
+              worked_minutes: Number(a.worked_minutes || 0),
+              bonus_minutes: Number(a.bonus_minutes || 0),
+              bonus_calculation_type: a.bonus_calculation_type || 'auto',
+              status: (a.status || 'presente') as any,
+              tardy_minutes: Number(a.tardy_minutes || 0),
+              overtime_minutes: Number(a.overtime_minutes || a.bonus_minutes || 0),
+              justification_note: a.justification_note || undefined,
+              justification_document_url: a.justification_document_url || undefined,
+            };
+          })
+        );
+      }
+
       setLastSyncTimestamp(new Date());
     } catch (err) {
       console.warn('Conexión en línea con Supabase completada con fallbacks:', err);
@@ -515,7 +595,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             payload.table === 'products' ||
             payload.table === 'ventas_mostrador' ||
             payload.table === 'expenses' ||
-            payload.table === 'wardrobe_items'
+            payload.table === 'wardrobe_items' ||
+            payload.table === 'employee_attendances' ||
+            payload.table === 'attendance_settings'
           ) {
             fetchAllFromSupabase();
           }
@@ -1398,140 +1480,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pulseRealtime();
   }, [pulseRealtime]);
 
-  // Check-In / Check-Out QR Scanner con cálculo de bonos según regla America/Lima
-  const scanAttendanceQR = useCallback((qrCode: string): {
-    success: boolean;
-    message: string;
-    employee?: Employee;
-    type?: 'check_in' | 'check_out';
-  } => {
-    const emp = employees.find((e) => e.qr_code_uuid === qrCode || e.id === qrCode);
-    if (!emp) {
-      return { success: false, message: 'Credencial QR no reconocida en el sistema de colaboradores.' };
-    }
-
-    const today = getTodayDateString();
-    const nowLima = new Date().toLocaleTimeString('es-PE', {
-      timeZone: 'America/Lima',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-
-    const currentAttendance = attendance.find(
-      (a) => a.employee_id === emp.id && a.date === today
-    );
-
-    if (!currentAttendance) {
-      // Check-In
-      const newAtt: EmployeeAttendance = {
-        id: `att-${Date.now()}`,
-        employee_id: emp.id,
-        employee_name: emp.full_name,
-        employee_type: emp.type as any,
-        date: today,
-        check_in: nowLima,
-        check_out: null,
-        worked_minutes: 0,
-        bonus_minutes: 0,
-        bonus_calculation_type: 'auto',
-        status: nowLima > '09:05' ? 'tardanza' : 'presente',
-      };
-      setAttendance((prev) => [newAtt, ...prev]);
-      pulseRealtime();
-
-      if (emp.id.includes('-') && emp.id.length === 36) {
-        supabase.from('employee_attendances').insert({
-          employee_id: emp.id,
-          date: today,
-          status: nowLima > '09:05' ? 'tardanza' : 'presente',
-        }).then();
-      }
-
-      return {
-        success: true,
-        message: `¡Check-In registrado exitosamente a las ${nowLima}!`,
-        employee: emp,
-        type: 'check_in',
-      };
-    }
-
-    if (currentAttendance && !currentAttendance.check_out) {
-      // Check-Out con cálculo de bono nocturno
-      const [inH, inM] = currentAttendance.check_in.split(':').map(Number);
-      const [outH, outM] = nowLima.split(':').map(Number);
-      const inMinutes = inH * 60 + inM;
-      const outMinutes = outH * 60 + outM;
-      const workedMinutes = Math.max(0, outMinutes - inMinutes);
-
-      const dayOfWeek = new Date().getDay();
-      const cutoffStr = dayOfWeek === 0 ? bonusSettings.sunday_cutoff : bonusSettings.weekday_cutoff;
-      const [cutH, cutM] = cutoffStr.split(':').map(Number);
-      const cutoffMinutes = cutH * 60 + cutM;
-
-      let bonusMinutes = 0;
-      if (outMinutes > cutoffMinutes) {
-        bonusMinutes = outMinutes - cutoffMinutes;
-      }
-
-      setAttendance((prev) =>
-        prev.map((a) =>
-          a.id === currentAttendance.id
-            ? {
-                ...a,
-                check_out: nowLima,
-                worked_minutes: workedMinutes,
-                bonus_minutes: bonusMinutes,
-                bonus_calculation_type: 'auto',
-                status: a.status === 'tardanza' ? 'tardanza' : 'presente',
-              }
-            : a
-        )
+  // Check-In / Check-Out QR Scanner con cálculo de puntualidad y horas extra
+  const scanAttendanceQR = useCallback(
+    (
+      qrCode: string
+    ): {
+      success: boolean;
+      message: string;
+      employee?: Employee;
+      type?: 'check_in' | 'check_out';
+      record?: EmployeeAttendance;
+      punctuality?: 'puntual' | 'tardanza' | 'horas_extra';
+      minutes?: number;
+    } => {
+      const cleanQr = (qrCode || '').trim();
+      let emp = employees.find(
+        (e) => e.qr_code_uuid === cleanQr || e.id === cleanQr || e.dni === cleanQr
       );
-      pulseRealtime();
-
-      if (currentAttendance.id.includes('-') && currentAttendance.id.length === 36) {
-        supabase.from('employee_attendances').update({
-          check_out: new Date().toISOString(),
-          bonus_minutes: bonusMinutes,
-          bonus_calculation_type: 'auto',
-        }).eq('id', currentAttendance.id).then();
+      if (!emp && cleanQr.startsWith('ACICALADOS-EMP-')) {
+        const parts = cleanQr.replace('ACICALADOS-EMP-', '').split('-');
+        const candidateId = parts[0];
+        const candidateDni = parts[1];
+        emp = employees.find(
+          (e) => e.id === candidateId || (candidateDni && e.dni === candidateDni)
+        );
       }
 
-      return {
-        success: true,
-        message: `¡Check-Out registrado a las ${nowLima}! Minutos de bono nocturno calculados: ${bonusMinutes} min.`,
-        employee: emp,
-        type: 'check_out',
-      };
-    }
+      if (!emp) {
+        return {
+          success: false,
+          message: 'Credencial QR no reconocida en el sistema de colaboradores.',
+        };
+      }
 
-    return {
-      success: true,
-      message: `${emp.full_name} ya completó su jornada de hoy (Entrada: ${currentAttendance.check_in}, Salida: ${currentAttendance.check_out}).`,
-      employee: emp,
-    };
-  }, [attendance, bonusSettings.sunday_cutoff, bonusSettings.weekday_cutoff, employees, pulseRealtime]);
+      const today = getTodayDateString();
+      const nowLima = new Date().toLocaleTimeString('es-PE', {
+        timeZone: 'America/Lima',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const [nowH, nowM] = nowLima.split(':').map(Number);
+      const nowMinutes = nowH * 60 + nowM;
 
-  const registerAttendancePunch = useCallback((employeeId: string, punchType: 'check_in' | 'check_out') => {
-    const emp = employees.find((e) => e.id === employeeId || e.qr_code_uuid === employeeId);
-    if (!emp) return;
-    const today = getTodayDateString();
-    const nowLima = new Date().toLocaleTimeString('es-PE', {
-      timeZone: 'America/Lima',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+      // Configuración de turnos y tolerancias
+      const [entryH, entryM] = (attendanceSettings.shift_entry_time || '09:00')
+        .split(':')
+        .map(Number);
+      const entryMinutes = entryH * 60 + entryM;
+      const entryTolerance = attendanceSettings.entry_tolerance_minutes ?? 15;
+      const maxEntryAllowed = entryMinutes + entryTolerance;
 
-    if (punchType === 'check_in') {
-      setAttendance((prev) => {
-        const existing = prev.find((a) => a.employee_id === emp.id && a.date === today);
-        if (existing) {
-          return prev.map((a) => (a.id === existing.id ? { ...a, check_in: nowLima } : a));
-        }
+      const [exitH, exitM] = (attendanceSettings.shift_exit_time || '19:00')
+        .split(':')
+        .map(Number);
+      const exitMinutes = exitH * 60 + exitM;
+      const exitTolerance = attendanceSettings.exit_tolerance_minutes ?? 15;
+      const overtimeThreshold = exitMinutes + exitTolerance;
+
+      const currentAttendance = attendance.find(
+        (a) => a.employee_id === emp.id && a.date === today
+      );
+
+      // CASO 1: ENTRADA (Check-In)
+      if (!currentAttendance) {
+        const isLate = nowMinutes > maxEntryAllowed;
+        const tardyMinutes = isLate ? Math.max(0, nowMinutes - entryMinutes) : 0;
+        const status = isLate ? 'tardanza' : 'presente';
+        const punctuality = isLate ? 'tardanza' : 'puntual';
+
+        const generatedId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `att-${Date.now()}`;
+
         const newAtt: EmployeeAttendance = {
-          id: `att-${Date.now()}`,
+          id: generatedId,
           employee_id: emp.id,
           employee_name: emp.full_name,
           employee_type: emp.type as any,
@@ -1541,62 +1565,263 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           worked_minutes: 0,
           bonus_minutes: 0,
           bonus_calculation_type: 'auto',
-          status: nowLima > '09:05' ? 'tardanza' : 'presente',
+          status,
+          tardy_minutes: tardyMinutes,
+          overtime_minutes: 0,
         };
-        return [newAtt, ...prev];
-      });
-    } else {
-      setAttendance((prev) => {
-        const existing = prev.find((a) => a.employee_id === emp.id && a.date === today);
-        const inTime = existing?.check_in || '09:00';
-        const [inH, inM] = inTime.split(':').map(Number);
-        const [outH, outM] = nowLima.split(':').map(Number);
+
+        setAttendance((prev) => [newAtt, ...prev]);
+        pulseRealtime();
+
+        supabase
+          .from('employee_attendances')
+          .insert({
+            id: generatedId.length === 36 ? generatedId : undefined,
+            employee_id: emp.id,
+            date: today,
+            check_in: nowLima,
+            status,
+            tardy_minutes: tardyMinutes,
+            overtime_minutes: 0,
+          })
+          .then();
+
+        return {
+          success: true,
+          message: isLate
+            ? `¡Entrada registrada a las ${nowLima}! Tardanza de ${tardyMinutes} min (tolerancia: ${entryTolerance} min).`
+            : `¡Entrada puntual registrada exitosamente a las ${nowLima}!`,
+          employee: emp,
+          type: 'check_in',
+          record: newAtt,
+          punctuality,
+          minutes: tardyMinutes,
+        };
+      }
+
+      // CASO 2: SALIDA (Check-Out)
+      if (currentAttendance && !currentAttendance.check_out) {
+        const [inH, inM] = (currentAttendance.check_in || '09:00')
+          .split(':')
+          .map(Number);
         const inMinutes = inH * 60 + inM;
-        const outMinutes = outH * 60 + outM;
-        const workedMinutes = Math.max(0, outMinutes - inMinutes);
+        const workedMinutes = Math.max(0, nowMinutes - inMinutes);
 
-        const dayOfWeek = new Date().getDay();
-        const cutoffStr = dayOfWeek === 0 ? bonusSettings.sunday_cutoff : bonusSettings.weekday_cutoff;
-        const [cutH, cutM] = cutoffStr.split(':').map(Number);
-        const cutoffMinutes = cutH * 60 + cutM;
+        const hasOvertime = nowMinutes > overtimeThreshold;
+        const overtimeMinutes = hasOvertime ? Math.max(0, nowMinutes - exitMinutes) : 0;
+        const punctuality = hasOvertime ? 'horas_extra' : 'puntual';
 
-        let bonusMinutes = 0;
-        if (outMinutes > cutoffMinutes) {
-          bonusMinutes = outMinutes - cutoffMinutes;
-        }
+        const updatedAtt: EmployeeAttendance = {
+          ...currentAttendance,
+          check_out: nowLima,
+          worked_minutes: workedMinutes,
+          overtime_minutes: overtimeMinutes,
+          bonus_minutes: overtimeMinutes,
+          bonus_calculation_type: 'auto',
+        };
 
-        if (existing) {
-          return prev.map((a) =>
-            a.id === existing.id
-              ? {
-                  ...a,
-                  check_out: nowLima,
-                  worked_minutes: workedMinutes,
-                  bonus_minutes: bonusMinutes,
-                  bonus_calculation_type: 'auto',
-                }
-              : a
-          );
-        } else {
+        setAttendance((prev) =>
+          prev.map((a) => (a.id === currentAttendance.id ? updatedAtt : a))
+        );
+        pulseRealtime();
+
+        supabase
+          .from('employee_attendances')
+          .update({
+            check_out: nowLima,
+            overtime_minutes: overtimeMinutes,
+            bonus_minutes: overtimeMinutes,
+            bonus_calculation_type: 'auto',
+          })
+          .eq('id', currentAttendance.id)
+          .then();
+
+        const workedHoursStr = `${Math.floor(workedMinutes / 60)}h ${workedMinutes % 60}m`;
+        return {
+          success: true,
+          message: hasOvertime
+            ? `¡Salida registrada a las ${nowLima}! Jornada: ${workedHoursStr}. Horas extra a favor: +${overtimeMinutes} min (${(overtimeMinutes / 60).toFixed(1)}h).`
+            : `¡Salida registrada a las ${nowLima}! Jornada cumplida: ${workedHoursStr}.`,
+          employee: emp,
+          type: 'check_out',
+          record: updatedAtt,
+          punctuality,
+          minutes: overtimeMinutes,
+        };
+      }
+
+      // CASO 3: YA MARCÓ ENTRADA Y SALIDA
+      return {
+        success: false,
+        message: `${emp.full_name} ya completó su jornada de hoy (Entrada: ${currentAttendance.check_in}, Salida: ${currentAttendance.check_out}).`,
+        employee: emp,
+        record: currentAttendance,
+      };
+    },
+    [attendance, attendanceSettings, employees, pulseRealtime]
+  );
+
+  const registerAttendancePunch = useCallback(
+    (employeeId: string, punchType: 'check_in' | 'check_out') => {
+      const emp = employees.find(
+        (e) => e.id === employeeId || e.qr_code_uuid === employeeId
+      );
+      if (!emp) return;
+      const today = getTodayDateString();
+      const nowLima = new Date().toLocaleTimeString('es-PE', {
+        timeZone: 'America/Lima',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const [nowH, nowM] = nowLima.split(':').map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+
+      const [entryH, entryM] = (attendanceSettings.shift_entry_time || '09:00')
+        .split(':')
+        .map(Number);
+      const entryMinutes = entryH * 60 + entryM;
+      const entryTolerance = attendanceSettings.entry_tolerance_minutes ?? 15;
+      const maxEntryAllowed = entryMinutes + entryTolerance;
+
+      const [exitH, exitM] = (attendanceSettings.shift_exit_time || '19:00')
+        .split(':')
+        .map(Number);
+      const exitMinutes = exitH * 60 + exitM;
+      const exitTolerance = attendanceSettings.exit_tolerance_minutes ?? 15;
+      const overtimeThreshold = exitMinutes + exitTolerance;
+
+      if (punchType === 'check_in') {
+        const isLate = nowMinutes > maxEntryAllowed;
+        const tardyMinutes = isLate ? Math.max(0, nowMinutes - entryMinutes) : 0;
+        const status = isLate ? 'tardanza' : 'presente';
+
+        const generatedId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `att-${Date.now()}`;
+
+        setAttendance((prev) => {
+          const existing = prev.find((a) => a.employee_id === emp.id && a.date === today);
+          if (existing) {
+            return prev.map((a) =>
+              a.id === existing.id
+                ? { ...a, check_in: nowLima, status, tardy_minutes: tardyMinutes }
+                : a
+            );
+          }
           const newAtt: EmployeeAttendance = {
-            id: `att-${Date.now()}`,
+            id: generatedId,
             employee_id: emp.id,
             employee_name: emp.full_name,
             employee_type: emp.type as any,
             date: today,
-            check_in: '09:00',
-            check_out: nowLima,
-            worked_minutes: workedMinutes,
-            bonus_minutes: bonusMinutes,
+            check_in: nowLima,
+            check_out: null,
+            worked_minutes: 0,
+            bonus_minutes: 0,
             bonus_calculation_type: 'auto',
-            status: 'presente',
+            status,
+            tardy_minutes: tardyMinutes,
+            overtime_minutes: 0,
           };
           return [newAtt, ...prev];
-        }
-      });
-    }
-    pulseRealtime();
-  }, [bonusSettings.sunday_cutoff, bonusSettings.weekday_cutoff, employees, pulseRealtime]);
+        });
+
+        supabase
+          .from('employee_attendances')
+          .insert({
+            id: generatedId.length === 36 ? generatedId : undefined,
+            employee_id: emp.id,
+            date: today,
+            check_in: nowLima,
+            status,
+            tardy_minutes: tardyMinutes,
+            overtime_minutes: 0,
+          })
+          .then();
+      } else {
+        setAttendance((prev) => {
+          const existing = prev.find((a) => a.employee_id === emp.id && a.date === today);
+          const inTime = existing?.check_in || attendanceSettings.shift_entry_time || '09:00';
+          const [inH, inM] = inTime.split(':').map(Number);
+          const inMinutes = inH * 60 + inM;
+          const workedMinutes = Math.max(0, nowMinutes - inMinutes);
+
+          const hasOvertime = nowMinutes > overtimeThreshold;
+          const overtimeMinutes = hasOvertime ? Math.max(0, nowMinutes - exitMinutes) : 0;
+
+          if (existing) {
+            if (existing.id.includes('-') && existing.id.length === 36) {
+              supabase
+                .from('employee_attendances')
+                .update({
+                  check_out: nowLima,
+                  overtime_minutes: overtimeMinutes,
+                  bonus_minutes: overtimeMinutes,
+                  bonus_calculation_type: 'auto',
+                })
+                .eq('id', existing.id)
+                .then();
+            }
+
+            return prev.map((a) =>
+              a.id === existing.id
+                ? {
+                    ...a,
+                    check_out: nowLima,
+                    worked_minutes: workedMinutes,
+                    overtime_minutes: overtimeMinutes,
+                    bonus_minutes: overtimeMinutes,
+                    bonus_calculation_type: 'auto',
+                  }
+                : a
+            );
+          } else {
+            const generatedId =
+              typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : `att-${Date.now()}`;
+            const newAtt: EmployeeAttendance = {
+              id: generatedId,
+              employee_id: emp.id,
+              employee_name: emp.full_name,
+              employee_type: emp.type as any,
+              date: today,
+              check_in: attendanceSettings.shift_entry_time || '09:00',
+              check_out: nowLima,
+              worked_minutes: workedMinutes,
+              bonus_minutes: overtimeMinutes,
+              bonus_calculation_type: 'auto',
+              status: 'presente',
+              tardy_minutes: 0,
+              overtime_minutes: overtimeMinutes,
+            };
+
+            supabase
+              .from('employee_attendances')
+              .insert({
+                id: generatedId.length === 36 ? generatedId : undefined,
+                employee_id: emp.id,
+                date: today,
+                check_in: attendanceSettings.shift_entry_time || '09:00',
+                check_out: nowLima,
+                bonus_minutes: overtimeMinutes,
+                bonus_calculation_type: 'auto',
+                status: 'presente',
+                tardy_minutes: 0,
+                overtime_minutes: overtimeMinutes,
+              })
+              .then();
+
+            return [newAtt, ...prev];
+          }
+        });
+      }
+      pulseRealtime();
+    },
+    [attendanceSettings, employees, pulseRealtime]
+  );
 
   const manualAdjustBonus = useCallback((attendanceId: string, newBonusMinutes: number, reason: string) => {
     setAttendance((prev) =>
@@ -1653,6 +1878,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBonusSettings((prev) => ({ ...prev, ...newSettings }));
     pulseRealtime();
   }, [pulseRealtime]);
+
+  const updateAttendanceSettings = useCallback(
+    async (newSettings: Partial<AttendanceSettings>): Promise<boolean> => {
+      try {
+        const merged: AttendanceSettings = {
+          ...attendanceSettings,
+          ...newSettings,
+        };
+        setAttendanceSettings(merged);
+
+        const { data, error } = await supabase
+          .from('attendance_settings')
+          .upsert({
+            id: merged.id || undefined,
+            shift_entry_time: merged.shift_entry_time,
+            shift_exit_time: merged.shift_exit_time,
+            entry_tolerance_minutes: Number(merged.entry_tolerance_minutes),
+            exit_tolerance_minutes: Number(merged.exit_tolerance_minutes),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setAttendanceSettings({
+            id: data.id,
+            shift_entry_time: data.shift_entry_time,
+            shift_exit_time: data.shift_exit_time,
+            entry_tolerance_minutes: Number(data.entry_tolerance_minutes),
+            exit_tolerance_minutes: Number(data.exit_tolerance_minutes),
+          });
+        }
+        pulseRealtime();
+        return true;
+      } catch (err) {
+        console.error('Error actualizando configuración de horarios de asistencia:', err);
+        return false;
+      }
+    },
+    [attendanceSettings, pulseRealtime]
+  );
 
   // CATALOG CRUD
   const addService = useCallback(async (srvData: Omit<Service, 'id'>): Promise<boolean> => {
@@ -2027,6 +2293,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         attendanceRecords: attendance,
         paymentSettings,
         bonusSettings,
+        attendanceSettings,
+        updateAttendanceSettings,
         cart,
         addToCart,
         removeFromCart,

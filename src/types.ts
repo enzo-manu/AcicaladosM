@@ -100,6 +100,8 @@ export interface EmployeeAttendance {
   bonus_minutes: number;
   bonus_calculation_type: 'auto' | 'manual';
   status: AttendanceStatus;
+  tardy_minutes?: number;
+  overtime_minutes?: number;
   justification_note?: string;
   justification_document_url?: string;
 }
@@ -223,6 +225,14 @@ export interface PaymentSettings {
 export interface BonusSettings {
   weekday_cutoff: string; // "21:10"
   sunday_cutoff: string; // "20:10"
+}
+
+export interface AttendanceSettings {
+  id?: string;
+  shift_entry_time: string; // e.g. "09:00"
+  shift_exit_time: string; // e.g. "19:00"
+  entry_tolerance_minutes: number; // e.g. 15
+  exit_tolerance_minutes: number; // e.g. 15
 }
 
 export interface CartItem {

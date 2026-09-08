@@ -80,6 +80,36 @@ export type Database = {
           },
         ]
       }
+      attendance_settings: {
+        Row: {
+          created_at: string
+          entry_tolerance_minutes: number
+          exit_tolerance_minutes: number
+          id: string
+          shift_entry_time: string
+          shift_exit_time: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entry_tolerance_minutes?: number
+          exit_tolerance_minutes?: number
+          id?: string
+          shift_entry_time?: string
+          shift_exit_time?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entry_tolerance_minutes?: number
+          exit_tolerance_minutes?: number
+          id?: string
+          shift_entry_time?: string
+          shift_exit_time?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bonus_settings: {
         Row: {
           bonus_start_time: string
@@ -440,7 +470,9 @@ export type Database = {
           exit_justification: string | null
           id: string
           notes: string | null
+          overtime_minutes: number | null
           status: string
+          tardy_minutes: number | null
           updated_at: string
         }
         Insert: {
@@ -460,7 +492,9 @@ export type Database = {
           exit_justification?: string | null
           id?: string
           notes?: string | null
+          overtime_minutes?: number | null
           status?: string
+          tardy_minutes?: number | null
           updated_at?: string
         }
         Update: {
@@ -480,7 +514,9 @@ export type Database = {
           exit_justification?: string | null
           id?: string
           notes?: string | null
+          overtime_minutes?: number | null
           status?: string
+          tardy_minutes?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -1097,6 +1133,7 @@ export type Database = {
           precio_unitario: number
           producto_nombre: string
           registrado_por: string | null
+          ticket_number: string | null
           total: number
           updated_at: string
         }
@@ -1111,6 +1148,7 @@ export type Database = {
           precio_unitario: number
           producto_nombre: string
           registrado_por?: string | null
+          ticket_number?: string | null
           total: number
           updated_at?: string
         }
@@ -1125,6 +1163,7 @@ export type Database = {
           precio_unitario?: number
           producto_nombre?: string
           registrado_por?: string | null
+          ticket_number?: string | null
           total?: number
           updated_at?: string
         }
