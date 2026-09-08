@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #0A0A0A;
+    --bg-surface: #141414;
+    --bg-elevated: #1E1E1E;
+    --border-subtle: rgba(200, 164, 92, 0.18);
+    --border-gold: #C8A45C;
+    --gold-primary: #C8A45C;
+    --gold-light: #DFCA8D;
+    --gold-dark: #9A7B38;
+  }
+
+  body {
+    background-color: #0A0A0A;
+    color: #E5E5E5;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, .font-serif-luxury {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-mono-code {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom badges matching specification */
+.badge-gold {
+  background-color: rgba(200, 164, 92, 0.15);
+  color: #E6C875;
+  border: 1px solid rgba(200, 164, 92, 0.35);
+}
+
+.badge-success {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #4ADE80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.badge-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-error {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.badge-neutral {
+  background-color: rgba(156, 163, 175, 0.15);
+  color: #9CA3AF;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0D0D0D;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A261D;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C8A45C;
+}
+
+/* Thermal Ticket Printing Optimizations (80mm & 58mm) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #thermal-ticket-print, #thermal-ticket-print * {
+    visibility: visible;
+  }
+  #thermal-ticket-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 2mm;
+    background: white !important;
+    color: black !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+}

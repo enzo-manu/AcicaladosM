@@ -1,0 +1,6 @@
+{
+  "name": "Acicalados Spa & Barber Shop",
+  "description": "Sistema de gestión integral, reservas online, punto de venta, caja y control operativo para Acicalados Spa & Barber Shop.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
