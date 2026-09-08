@@ -1,22 +1,98 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import { createServerClient, parseCookieHeader, serializeCookieHeader } from '@supabase/ssr';
 
-export default defineConfig(() => {
+/**
+ * Route Handler middleware para procesar el intercambio de código OAuth de Supabase
+ * utilizando @supabase/ssr y persistir la sesión segura en cookies HTTP.
+ */
+function supabaseAuthCallbackPlugin(env: Record<string, string>) {
+  const supabaseUrl =
+    env.VITE_SUPABASE_URL ||
+    env.NEXT_PUBLIC_SUPABASE_URL ||
+    'https://ydvqzgyhymjgbyfkxqhd.supabase.co';
+
+  const supabaseAnonKey =
+    env.VITE_SUPABASE_ANON_KEY ||
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkdnF6Z3loeW1qZ2J5Zmt4cWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NTczNDYsImV4cCI6MjEwNDQzMzM0Nn0.7jGqXpA1Cq6yFgFHtpQTkm-sMOC5c5juUZQLWVWzMgU';
+
   return {
-    plugins: [react(), tailwindcss()],
+    name: 'supabase-auth-callback-handler',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        if (req.url && req.url.startsWith('/auth/callback')) {
+          try {
+            const url = new URL(req.url, `http://${req.headers.host || 'localhost:3000'}`);
+            const code = url.searchParams.get('code');
+            const nextParam = url.searchParams.get('next');
+
+            if (code) {
+              const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+                cookies: {
+                  getAll() {
+                    return parseCookieHeader(req.headers.cookie ?? '');
+                  },
+                  setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value, options }) => {
+                      res.appendHeader('Set-Cookie', serializeCookieHeader(name, value, options));
+                    });
+                  },
+                },
+              });
+
+              const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+              if (!error && data?.user) {
+                // Consultar rol en la tabla profiles de Supabase
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('role')
+                  .eq('id', data.user.id)
+                  .single();
+
+                const role = profile?.role || 'cliente';
+                const redirectTarget =
+                  role === 'admin' || role === 'recepcionista' ? '/dashboard' : nextParam || '/mi-cuenta';
+
+                res.statusCode = 302;
+                res.setHeader('Location', redirectTarget);
+                res.end();
+                return;
+              }
+            }
+          } catch (err) {
+            console.error('Error en Route Handler /auth/callback:', err);
+          }
+        }
+        next();
+      });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
+  return {
+    plugins: [react(), tailwindcss(), supabaseAuthCallbackPlugin(env)],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      port: 3000,
+      host: '0.0.0.0',
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      watch:
+        process.env.DISABLE_HMR === 'true'
+          ? null
+          : {
+              usePolling: true,
+              interval: 1000,
+            },
     },
   };
 });

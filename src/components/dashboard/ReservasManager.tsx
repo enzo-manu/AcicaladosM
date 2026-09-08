@@ -20,6 +20,7 @@ import {
   Sparkles,
   Shield,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 
 export const ReservasManager: React.FC = () => {
@@ -35,6 +36,8 @@ export const ReservasManager: React.FC = () => {
     voidPayment,
     updateBookingStatus,
     liberateServiceEarly,
+    deleteBooking,
+    editBooking,
     addBooking,
     openTicketModal,
   } = useApp();
@@ -56,6 +59,20 @@ export const ReservasManager: React.FC = () => {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
   const [selectedBookingForHistory, setSelectedBookingForHistory] = useState<Booking | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+
+  // Edit Reservation Modal State (Admin)
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [selectedBookingForEdit, setSelectedBookingForEdit] = useState<Booking | null>(null);
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientPhone, setEditClientPhone] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editStatus, setEditStatus] = useState<BookingStatus>('pendiente');
+
+  // Delete Reservation Modal State (Admin)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Payment Form State
   const [paymentMethod, setPaymentMethod] = useState<'yape' | 'efectivo' | 'mixto'>('yape');
@@ -168,6 +185,51 @@ export const ReservasManager: React.FC = () => {
     voidPayment(paymentId, voidReason);
     setVoidingPaymentId(null);
     setVoidReason('');
+  };
+
+  // Handle Edit Reservation (Admin)
+  const handleOpenEditModal = (b: Booking) => {
+    setSelectedBookingForEdit(b);
+    setEditClientName(b.client_name);
+    setEditClientPhone(b.client_phone);
+    setEditDate(b.date);
+    setEditStartTime(b.start_time);
+    setEditStatus(b.status);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBookingForEdit) return;
+
+    await editBooking(selectedBookingForEdit.id, {
+      client_name: editClientName.trim(),
+      client_phone: editClientPhone.trim(),
+      date: editDate,
+      start_time: editStartTime,
+      status: editStatus,
+    });
+
+    setIsEditModalOpen(false);
+    setSelectedBookingForEdit(null);
+  };
+
+  // Handle Delete Reservation (Admin only)
+  const handleOpenDeleteModal = (b: Booking) => {
+    setBookingToDelete(b);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!bookingToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteBooking(bookingToDelete.id);
+      setIsDeleteModalOpen(false);
+      setBookingToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Save Settings
@@ -502,6 +564,30 @@ export const ReservasManager: React.FC = () => {
                             >
                               <MessageSquare className="w-3.5 h-3.5" />
                             </a>
+
+                            {/* Botón Editar Reserva (Administrador) */}
+                            {currentRole === 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(b)}
+                                className="p-1.5 rounded bg-neutral-800 hover:bg-amber-950/60 text-amber-300 hover:text-amber-200 transition cursor-pointer border border-amber-900/40"
+                                title="Editar reserva (Solo Administrador)"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Botón Eliminar Reserva (Exclusivo Administrador - Oculto para Recepcionista) */}
+                            {currentRole === 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDeleteModal(b)}
+                                className="p-1.5 rounded bg-neutral-800 hover:bg-red-950/60 text-red-400 hover:text-red-300 transition cursor-pointer border border-red-900/40"
+                                title="Eliminar reserva permanentemente (Solo Administrador)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -541,16 +627,19 @@ export const ReservasManager: React.FC = () => {
                                       </span>
 
                                       {srv.liberado_at ? (
-                                        <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 text-[10px] font-semibold">
-                                          ✓ Liberado a las {srv.liberado_at}
+                                        <span className="px-2.5 py-1 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-800/70 text-[10px] font-semibold flex items-center gap-1.5 shadow-sm">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                          ✓ Culminado a las {srv.liberado_at}
                                         </span>
                                       ) : (
                                         <button
                                           type="button"
                                           onClick={() => liberateServiceEarly(b.id, sIdx)}
-                                          className="px-2.5 py-1 rounded text-[10px] font-semibold bg-neutral-800 hover:bg-emerald-700 text-neutral-200 hover:text-white transition"
+                                          className="px-2.5 py-1 rounded text-[10px] font-semibold bg-[#C8A45C]/15 hover:bg-emerald-600/30 text-[#E6C875] hover:text-emerald-200 border border-[#C8A45C]/35 hover:border-emerald-500/50 transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                          title="Culminar servicio y liberar disponibilidad del especialista de inmediato"
                                         >
-                                          Liberar Especialista
+                                          <Sparkles className="w-3 h-3 text-[#E6C875] shrink-0" />
+                                          <span>Culminar / Liberar</span>
                                         </button>
                                       )}
                                     </div>
@@ -1002,6 +1091,155 @@ export const ReservasManager: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Editar Reserva (Solo Administrador) */}
+      {isEditModalOpen && selectedBookingForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#141414] border border-[#C8A45C]/40 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-[#C8A45C]" />
+                <h3 className="font-serif-luxury text-base font-bold text-white">
+                  Editar Reserva #{selectedBookingForEdit.code}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <label className="text-neutral-300 font-medium">Nombre del Cliente *</label>
+                <input
+                  type="text"
+                  required
+                  value={editClientName}
+                  onChange={(e) => setEditClientName(e.target.value)}
+                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-neutral-300 font-medium">Teléfono WhatsApp *</label>
+                <input
+                  type="tel"
+                  required
+                  value={editClientPhone}
+                  onChange={(e) => setEditClientPhone(e.target.value)}
+                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-neutral-300 font-medium">Fecha</label>
+                  <input
+                    type="date"
+                    required
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2 outline-none focus:border-[#C8A45C]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-neutral-300 font-medium">Hora Inicio</label>
+                  <input
+                    type="time"
+                    required
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2 outline-none focus:border-[#C8A45C]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-neutral-300 font-medium">Estado de la Reserva</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as BookingStatus)}
+                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]"
+                >
+                  <option value="pendiente">Pendiente (Sin confirmar)</option>
+                  <option value="confirmada">Confirmada (Adelanto registrado)</option>
+                  <option value="en_atencion">En Atención (En sillón)</option>
+                  <option value="completada">Completada (Atendida)</option>
+                  <option value="cancelada">Cancelada</option>
+                  <option value="no_asistio">No asistió</option>
+                </select>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white bg-neutral-800 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl font-semibold bg-[#C8A45C] hover:bg-[#D4AF37] text-black shadow cursor-pointer"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Confirmar Eliminación (Exclusivo Administrador) */}
+      {isDeleteModalOpen && bookingToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#141414] border border-red-800/50 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-950/60 border border-red-800/60 text-red-400 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-serif-luxury text-base font-bold text-white">
+                  Eliminar Reserva
+                </h3>
+                <p className="text-xs text-neutral-400">
+                  Reserva #{bookingToDelete.code} - {bookingToDelete.client_name}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed bg-[#1c1414] p-3 rounded-xl border border-red-900/30">
+              ¿Estás seguro de que deseas eliminar permanentemente esta reserva? Esta acción es <span className="text-red-400 font-semibold">irreversible</span> y removerá los servicios vinculados y el bloqueo de horario en la base de datos de Supabase.
+            </p>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setBookingToDelete(null);
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-5 py-2 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white shadow cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? 'Eliminando...' : 'Sí, Eliminar Reserva'}
+              </button>
+            </div>
           </div>
         </div>
       )}

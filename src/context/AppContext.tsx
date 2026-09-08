@@ -30,11 +30,11 @@ import {
   INITIAL_BONUS_SETTINGS,
   getTodayDateString,
 } from '../data/initialData';
+import { supabase } from '../lib/supabase/client';
 
 interface AppContextType {
   // Navigation & Role
   currentRole: UserRole;
-  setCurrentRole: (role: UserRole) => void;
   activeView: string;
   setActiveView: (view: string) => void;
   currentUser: {
@@ -44,6 +44,7 @@ interface AppContextType {
     avatar: string;
     role: UserRole;
   };
+  signOut: () => Promise<void>;
 
   // Data Collections
   services: Service[];
@@ -74,10 +75,11 @@ interface AppContextType {
   openTicketModal: (type: 'booking' | 'venta' | 'pos', data: Booking | VentaMostrador) => void;
   closeTicketModal: () => void;
 
-  // Realtime Simulation
+  // Realtime Simulation / Supabase Realtime
   realtimeConnected: boolean;
   pulseRealtime: () => void;
   lastSyncTimestamp: Date;
+  refreshData: () => Promise<void>;
 
   // Business Action Handlers
   addBooking: (booking: Omit<Booking, 'id' | 'code' | 'created_at'>) => Booking;
@@ -92,10 +94,12 @@ interface AppContextType {
   ) => void;
   voidPayment: (paymentId: string, reason: string) => void;
   liberateServiceEarly: (bookingId: string, serviceIndex: number) => void;
+  deleteBooking: (bookingId: string) => Promise<boolean>;
+  editBooking: (bookingId: string, updates: Partial<Booking>) => Promise<boolean>;
 
   // POS
-  registerVentaMostrador: (venta: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'>) => VentaMostrador;
-  registerCounterSale: (venta: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'>) => VentaMostrador;
+  registerVentaMostrador: (venta: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'> & { created_at?: string }) => VentaMostrador;
+  registerCounterSale: (venta: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'> & { created_at?: string }) => VentaMostrador;
   deleteVentaMostrador: (id: string) => void;
 
   // Expenses
@@ -116,12 +120,16 @@ interface AppContextType {
   updateBonusSettings: (settings: Partial<BonusSettings>) => void;
 
   // Catalog CRUD
-  addService: (srv: Omit<Service, 'id'>) => void;
-  updateService: (srv: Service) => void;
+  addService: (srv: Omit<Service, 'id'>) => Promise<boolean>;
+  updateService: (srv: Service) => Promise<boolean>;
+  deleteService: (serviceId: string) => Promise<boolean>;
+  toggleServiceActive: (serviceId: string, currentActive: boolean) => Promise<boolean>;
   addProduct: (prod: Omit<Product, 'id'>) => void;
   updateProduct: (prod: Product) => void;
-  addWardrobeItem: (item: Omit<WardrobeItem, 'id'>) => void;
-  updateWardrobeItem: (item: WardrobeItem) => void;
+  addWardrobeItem: (item: Omit<WardrobeItem, 'id'>) => Promise<boolean>;
+  updateWardrobeItem: (item: WardrobeItem) => Promise<boolean>;
+  deleteWardrobeItem: (id: string) => Promise<boolean>;
+  toggleWardrobeActive: (id: string, currentActive: boolean) => Promise<boolean>;
   updateWardrobeStatus: (id: string, status: WardrobeStatus) => void;
 
   // KPI Calculations
@@ -135,11 +143,68 @@ interface AppContextType {
   };
 }
 
+const getInitialView = (): string => {
+  if (typeof window !== 'undefined' && window.location && window.location.pathname) {
+    const path = window.location.pathname;
+    if (
+      path === '/auth/login' ||
+      path === '/auth/callback' ||
+      path.startsWith('/dashboard') ||
+      path === '/mi-cuenta' ||
+      path === '/servicios' ||
+      path === '/reservar' ||
+      path === '/tienda' ||
+      path === '/productos' ||
+      path === '/vestuario' ||
+      path === '/ubicacion'
+    ) {
+      return path;
+    }
+  }
+  return '/';
+};
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentRole, setCurrentRoleState] = useState<UserRole>('admin');
-  const [activeView, setActiveView] = useState<string>('/dashboard');
+  const [currentRole, setCurrentRoleState] = useState<UserRole>('anon');
+  const [activeViewState, setActiveViewState] = useState<string>(getInitialView);
+  const [currentUserOverride, setCurrentUserOverride] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    role: UserRole;
+  } | null>(null);
+
+  const activeView = activeViewState;
+  const setActiveView = useCallback((view: string) => {
+    setActiveViewState(view);
+    if (typeof window !== 'undefined' && window.location.pathname !== view) {
+      window.history.pushState(null, '', view);
+    }
+  }, []);
+
+  // Sincronizar navegación con el historial del navegador
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        setActiveViewState(window.location.pathname || '/');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Protección de rutas: redirigir a clientes y no autenticados fuera de /dashboard
+  useEffect(() => {
+    if (
+      activeViewState.startsWith('/dashboard') &&
+      (currentRole === 'cliente' || currentRole === 'anonimo' || currentRole === 'anon')
+    ) {
+      setActiveView('/mi-cuenta');
+    }
+  }, [activeViewState, currentRole, setActiveView]);
   const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>(INITIAL_WARDROBE);
@@ -154,73 +219,344 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [activeTicket, setActiveTicket] = useState<{ type: 'booking' | 'venta'; data: Booking | VentaMostrador } | null>(null);
-  const [realtimeConnected] = useState<boolean>(true);
+  const [realtimeConnected, setRealtimeConnected] = useState<boolean>(true);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date>(new Date());
+
+  // --- CARGA INICIAL DESDE SUPABASE ---
+  const fetchAllFromSupabase = useCallback(async () => {
+    try {
+      // 1. Servicios
+      const { data: dbServices } = await supabase.from('services').select('*').order('sort_order');
+      if (dbServices && dbServices.length > 0) {
+        setServices(
+          dbServices.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            slug: s.slug,
+            category: s.type as 'barberia' | 'spa',
+            price_cents: s.price_cents,
+            duration_minutes: s.duration_minutes,
+            capacity: s.capacity,
+            active: s.is_active,
+            image_url: s.images && s.images.length > 0 ? s.images[0] : 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80',
+            description: s.description || '',
+          }))
+        );
+      }
+
+      // 2. Productos
+      const { data: dbProducts } = await supabase.from('products').select('*').order('sort_order');
+      if (dbProducts && dbProducts.length > 0) {
+        setProducts(
+          dbProducts.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            category: (p.category || 'ceras_pomadas') as any,
+            price_cents: p.price_cents,
+            stock: p.stock,
+            image_url: p.images && p.images.length > 0 ? p.images[0] : 'https://images.unsplash.com/photo-1585232351009-aa87416fca90?auto=format&fit=crop&w=600&q=80',
+            description: p.description || '',
+          }))
+        );
+      }
+
+      // 3. Vestuario
+      const { data: dbWardrobe } = await supabase.from('wardrobe_items').select('*').order('code');
+      if (dbWardrobe && dbWardrobe.length > 0) {
+        setWardrobe(
+          dbWardrobe.map((w: any) => ({
+            id: w.id,
+            code: (w.code || 'A').toUpperCase().trim(),
+            name: w.name,
+            category: w.category || 'Bodas y Matrimonio',
+            rental_price_cents: w.price_cents,
+            deposit_cents: w.deposit_cents || 0,
+            status: (w.availability_status || 'disponible') as WardrobeStatus,
+            active: w.is_active !== undefined ? w.is_active : true,
+            image_url: w.images && w.images.length > 0 ? w.images[0] : 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80',
+            size: w.section || 'Standard / Ajustable',
+            description: w.description || '',
+          }))
+        );
+      }
+
+      // 4. Empleados y Habilidades
+      const { data: dbEmployees } = await supabase
+        .from('employees')
+        .select('*, employee_skills(service_id)')
+        .order('rotation_order');
+      
+      const empMap = new Map<string, string>();
+      if (dbEmployees && dbEmployees.length > 0) {
+        dbEmployees.forEach((e: any) => {
+          empMap.set(e.id, `${e.first_name} ${e.last_name}`.trim());
+        });
+        setEmployees(
+          dbEmployees.map((e: any) => ({
+            id: e.id,
+            full_name: `${e.first_name} ${e.last_name}`.trim(),
+            type: e.type,
+            skills: e.employee_skills ? e.employee_skills.map((sk: any) => sk.service_id) : [],
+            active: e.is_active,
+            avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+            phone: '+51 987 654 321',
+            qr_code_uuid: e.id,
+            rotation_order: e.rotation_order,
+          }))
+        );
+      }
+
+      // 5. Configuración de Negocio
+      const { data: dbConfig } = await supabase.from('business_config').select('*').limit(1).single();
+      if (dbConfig) {
+        setPaymentSettings((prev) => ({
+          ...prev,
+          advance_percentage: dbConfig.advance_percentage || 25,
+          yape_phone: dbConfig.whatsapp_url?.replace(/\D/g, '') || '987654321',
+        }));
+      }
+
+      // 6. Reservas
+      const { data: dbBookings } = await supabase
+        .from('bookings')
+        .select('*, booking_services(*)')
+        .order('created_at', { ascending: false });
+      if (dbBookings && dbBookings.length > 0) {
+        setBookings(
+          dbBookings.map((b: any) => ({
+            id: b.id,
+            code: b.booking_code,
+            client_name: `${b.client_first_name} ${b.client_last_name}`.trim(),
+            client_phone: b.client_phone || '',
+            client_email: b.client_email || '',
+            client_dni: b.client_dni || '',
+            date: b.booking_date,
+            start_time: b.start_time?.substring(0, 5) || '10:00',
+            end_time: b.end_time?.substring(0, 5) || '11:00',
+            type: b.service_type as any,
+            services: b.booking_services ? b.booking_services.map((bs: any) => {
+              const assignedEmpId = bs.assigned_employee_id || b.assigned_employee_id || '';
+              const assignedEmpName = empMap.get(assignedEmpId) || 'Especialista';
+              return {
+                service_id: bs.service_id || '',
+                service_name: bs.service_name,
+                employee_id: assignedEmpId,
+                employee_name: assignedEmpName,
+                price_cents: bs.service_price_cents,
+                duration_minutes: bs.duration_minutes,
+                liberado_at: bs.liberado_at || undefined,
+              };
+            }) : [],
+            total_price_cents: b.total_price_cents,
+            advance_amount_cents: b.advance_amount_cents || 0,
+            status: b.status as BookingStatus,
+            payment_status: b.payment_status as any,
+            created_at: b.created_at,
+            confirmed_at: b.confirmed_at || undefined,
+          }))
+        );
+      }
+
+      // 7. Pagos
+      const { data: dbPayments } = await supabase
+        .from('payment_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (dbPayments && dbPayments.length > 0) {
+        setPaymentLogs(
+          dbPayments.map((p: any) => ({
+            id: p.id,
+            booking_id: p.booking_id || '',
+            booking_code: 'AC-PAGO',
+            amount_cents: p.amount_cents || 0,
+            payment_method: (p.payment_method === 'cash' ? 'efectivo' : p.payment_method) as any,
+            cash_cents: p.cash_amount_cents || 0,
+            yape_cents: p.yape_amount_cents || 0,
+            voucher_url: p.proof_url || undefined,
+            created_at: p.created_at,
+            voided: p.status === 'voided',
+            voided_reason: p.void_reason || undefined,
+            voided_by: p.voided_by || undefined,
+          }))
+        );
+      }
+
+      // 8. Ventas de Mostrador
+      const { data: dbVentas } = await supabase
+        .from('ventas_mostrador')
+        .select('*')
+        .order('fecha', { ascending: false });
+      if (dbVentas && dbVentas.length > 0) {
+        setVentasMostrador(
+          dbVentas.map((v: any) => ({
+            id: v.id,
+            ticket_number: v.ticket_number || `TK-${v.id.substring(0, 5).toUpperCase()}`,
+            client_name: v.cliente_nombre,
+            product_name: v.producto_nombre,
+            quantity: v.cantidad,
+            unit_price_cents: Math.round(Number(v.precio_unitario) * 100),
+            total_price_cents: Math.round(Number(v.total) * 100),
+            payment_method: (v.metodo_pago?.toLowerCase() || 'efectivo') as any,
+            notes: v.notas || undefined,
+            created_at: v.fecha || v.created_at,
+          }))
+        );
+      }
+
+      // 9. Egresos
+      const { data: dbExpenses } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('expense_date', { ascending: false });
+      if (dbExpenses && dbExpenses.length > 0) {
+        setExpenses(
+          dbExpenses.map((e: any) => ({
+            id: e.id,
+            description: e.description,
+            category: e.category,
+            amount_cents: e.amount_cents,
+            payment_method: e.payment_method === 'cash' ? 'efectivo' : e.payment_method,
+            beneficiary: e.supplier || '',
+            voucher_url: e.receipt_url || undefined,
+            date: e.expense_date,
+            voided: e.status === 'voided',
+            voided_reason: e.void_reason || undefined,
+            voided_by: e.voided_by || undefined,
+            created_at: e.created_at || e.expense_date,
+          }))
+        );
+      }
+
+      setLastSyncTimestamp(new Date());
+    } catch (err) {
+      console.warn('Conexión en línea con Supabase completada con fallbacks:', err);
+    }
+  }, []);
 
   const pulseRealtime = useCallback(() => {
     setLastSyncTimestamp(new Date());
+    fetchAllFromSupabase();
+  }, [fetchAllFromSupabase]);
+
+  // Suscripción a Supabase Realtime
+  useEffect(() => {
+    fetchAllFromSupabase();
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          setLastSyncTimestamp(new Date());
+          if (
+            payload.table === 'bookings' ||
+            payload.table === 'booking_services' ||
+            payload.table === 'payment_logs' ||
+            payload.table === 'employee_blocks' ||
+            payload.table === 'services' ||
+            payload.table === 'products' ||
+            payload.table === 'ventas_mostrador' ||
+            payload.table === 'expenses' ||
+            payload.table === 'wardrobe_items'
+          ) {
+            fetchAllFromSupabase();
+          }
+        }
+      )
+      .subscribe((status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchAllFromSupabase]);
+
+  // Sincronización en tiempo real con Supabase Auth
+  useEffect(() => {
+    const syncUserSession = async (session: any) => {
+      if (session?.user) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          const role = (profile?.role || 'cliente') as UserRole;
+          setCurrentRoleState(role);
+
+          const name = profile?.first_name
+            ? `${profile.first_name} ${profile.last_name || ''}`.trim()
+            : session.user.user_metadata?.full_name ||
+              session.user.user_metadata?.name ||
+              session.user.email?.split('@')[0] ||
+              'Cliente';
+
+          setCurrentUserOverride({
+            id: session.user.id,
+            name,
+            email: session.user.email || '',
+            avatar:
+              profile?.avatar_url ||
+              session.user.user_metadata?.avatar_url ||
+              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+            role,
+          });
+        } catch (err) {
+          console.warn('Sincronización de perfil de auth completada con fallbacks:', err);
+        }
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        syncUserSession(session);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        syncUserSession(session);
+      } else {
+        setCurrentRoleState('anon');
+        setCurrentUserOverride(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Sync user profile with role
+  // Perfil del usuario sincronizado estrictamente con la sesión real de Supabase
   const currentUser = useMemo(() => {
-    switch (currentRole) {
-      case 'admin':
-        return {
-          id: 'emp-5',
-          name: 'Enzo Costa Reyes',
-          email: 'admin@acicalados.pe',
-          avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-          role: 'admin' as UserRole,
-        };
-      case 'recepcionista':
-        return {
-          id: 'emp-4',
-          name: 'Camila Zúñiga Paredes',
-          email: 'recepcion@acicalados.pe',
-          avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-          role: 'recepcionista' as UserRole,
-        };
-      case 'empleado':
-        return {
-          id: 'emp-1',
-          name: 'Carlos Mendoza Ramos',
-          email: 'carlos.mendoza@acicalados.pe',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-          role: 'empleado' as UserRole,
-        };
-      case 'cliente':
-        return {
-          id: 'cli-1',
-          name: 'Sebastián Alarcón Peña',
-          email: 's.alarcon@hotmail.com',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          role: 'cliente' as UserRole,
-        };
-      default:
-        return {
-          id: 'anon-0',
-          name: 'Visitante Invitado',
-          email: 'visitante@acicalados.pe',
-          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          role: 'anon' as UserRole,
-        };
+    if (currentUserOverride) {
+      return currentUserOverride;
     }
-  }, [currentRole]);
+    return {
+      id: 'anon-0',
+      name: 'Visitante Invitado',
+      email: '',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+      role: 'anon' as UserRole,
+    };
+  }, [currentUserOverride]);
 
-  // Adjust view when role changes if restricted
-  const setCurrentRole = useCallback((newRole: UserRole) => {
-    setCurrentRoleState(newRole);
-    if (newRole === 'cliente' || newRole === 'anon') {
-      if (activeView.startsWith('/dashboard')) {
-        setActiveView('/');
-      }
-    } else if (newRole === 'empleado') {
-      // Employee role is restricted to dashboard home and attendance
-      if (activeView !== '/dashboard' && activeView !== '/dashboard/asistencia') {
-        setActiveView('/dashboard');
-      }
+  const signOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Error cerrando sesión:', err);
     }
-  }, [activeView]);
+    setCurrentUserOverride(null);
+    setCurrentRoleState('anon');
+    setActiveView('/');
+  }, [setActiveView]);
 
   // Thermal Ticket Actions
   const openTicketModal = useCallback((type: 'booking' | 'venta' | 'pos', data: Booking | VentaMostrador) => {
@@ -271,23 +607,132 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBooking = useCallback((bookingData: Omit<Booking, 'id' | 'code' | 'created_at'>): Booking => {
     const today = getTodayDateString();
     const randomCode = `AC-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newId = `bk-${Date.now()}`;
     const newBooking: Booking = {
       ...bookingData,
-      id: `bk-${Date.now()}`,
+      id: newId,
       code: randomCode,
       created_at: `${today}T12:00:00Z`,
     };
 
     setBookings((prev) => [newBooking, ...prev]);
     pulseRealtime();
+
+    // Persistir directamente en Supabase
+    (async () => {
+      try {
+        const names = bookingData.client_name.trim().split(' ');
+        const firstName = names[0] || 'Cliente';
+        const lastName = names.slice(1).join(' ') || 'General';
+
+        // Buscar UUID de empleado si es valido
+        const primaryEmpId = bookingData.services?.[0]?.employee_id;
+        const validEmp = employees.find(
+          (e) => e.id === primaryEmpId || e.full_name === bookingData.services?.[0]?.employee_name
+        );
+        const safeEmployeeId =
+          primaryEmpId && primaryEmpId.includes('-') && primaryEmpId.length === 36
+            ? primaryEmpId
+            : validEmp && validEmp.id.includes('-') && validEmp.id.length === 36
+            ? validEmp.id
+            : null;
+
+        const advanceAmount = bookingData.advance_amount_cents || 0;
+        const advancePercentage = Math.max(1, paymentSettings?.advance_percentage || 25);
+        const totalPrice = bookingData.total_price_cents || 0;
+        const balance = Math.max(0, totalPrice - advanceAmount);
+
+        const { data: insertedBooking, error } = await supabase
+          .from('bookings')
+          .insert({
+            booking_code: randomCode,
+            client_first_name: firstName,
+            client_last_name: lastName,
+            client_phone: bookingData.client_phone || null,
+            client_email: bookingData.client_email || null,
+            client_dni: bookingData.client_dni || null,
+            service_type: bookingData.type || 'barberia',
+            booking_date: bookingData.date,
+            start_time: bookingData.start_time,
+            end_time: bookingData.end_time,
+            total_duration_minutes:
+              bookingData.services?.reduce((acc, s) => acc + (s.duration_minutes || 0), 0) || 60,
+            total_price_cents: totalPrice,
+            advance_percentage: advancePercentage,
+            advance_amount_cents: advanceAmount,
+            balance_cents: balance,
+            status: bookingData.status || 'confirmada',
+            payment_status:
+              bookingData.payment_status ||
+              (advanceAmount >= totalPrice ? 'total' : advanceAmount > 0 ? 'parcial' : 'sin_pago'),
+            assigned_employee_id: safeEmployeeId,
+          })
+          .select()
+          .single();
+
+        if (insertedBooking) {
+          if (bookingData.services && bookingData.services.length > 0) {
+            const serviceRows = bookingData.services.map((srv) => {
+              const matchedService = services.find(
+                (s) => s.id === srv.service_id || s.name === srv.service_name
+              );
+              const srvId =
+                matchedService && matchedService.id.includes('-') && matchedService.id.length === 36
+                  ? matchedService.id
+                  : srv.service_id && srv.service_id.includes('-') && srv.service_id.length === 36
+                  ? srv.service_id
+                  : null;
+
+              return {
+                booking_id: insertedBooking.id,
+                service_id: srvId,
+                service_name: srv.service_name,
+                service_price_cents: srv.price_cents,
+                duration_minutes: srv.duration_minutes,
+                assigned_employee_id: safeEmployeeId,
+                hora_inicio: bookingData.start_time,
+                hora_fin: bookingData.end_time,
+                status: 'confirmada',
+              };
+            });
+            await supabase.from('booking_services').insert(serviceRows);
+          }
+
+          // Actualizar ID local al UUID de Supabase
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === newId
+                ? {
+                    ...b,
+                    id: insertedBooking.id,
+                    code: insertedBooking.booking_code,
+                  }
+                : b
+            )
+          );
+          pulseRealtime();
+        } else if (error) {
+          console.error('Error al insertar reserva en Supabase:', error);
+        }
+      } catch (err) {
+        console.error('Error guardando reserva en Supabase:', err);
+      }
+    })();
+
     return newBooking;
-  }, [pulseRealtime]);
+  }, [paymentSettings.advance_percentage, pulseRealtime, employees, services]);
 
   const updateBookingStatus = useCallback((id: string, status: BookingStatus) => {
     setBookings((prev) =>
       prev.map((b) => (b.id === id ? { ...b, status } : b))
     );
     pulseRealtime();
+
+    if (id.includes('-') && id.length === 36) {
+      supabase.from('bookings').update({ status }).eq('id', id).then(() => {
+        pulseRealtime();
+      });
+    }
   }, [pulseRealtime]);
 
   const registerBookingPayment = useCallback((
@@ -306,7 +751,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const minAdvanceCents = Math.round((b.total_price_cents * paymentSettings.advance_percentage) / 100);
 
           let newStatus = b.status;
-          // Rule: If advance satisfies >= 25%, transition to confirmed
           if (newAdvance >= minAdvanceCents && b.status === 'pendiente') {
             newStatus = 'confirmada';
           }
@@ -333,7 +777,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     });
 
-    // Log the payment
     const targetBooking = bookings.find((b) => b.id === bookingId);
     const newLog: PaymentLog = {
       id: `pay-${Date.now()}`,
@@ -349,10 +792,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setPaymentLogs((prev) => [newLog, ...prev]);
     pulseRealtime();
+
+    // Guardar log en Supabase y actualizar reserva
+    if (bookingId.includes('-') && bookingId.length === 36) {
+      supabase.from('payment_logs').insert({
+        booking_id: bookingId,
+        amount_cents: amountCents,
+        payment_method: method,
+        cash_amount_cents: cashCents,
+        yape_amount_cents: yapeCents,
+        proof_url: voucherUrl || null,
+        status: 'verified',
+      }).then();
+
+      const newAdvance = (targetBooking?.advance_amount_cents || 0) + amountCents;
+      const totalPrice = targetBooking?.total_price_cents || 0;
+      const minAdvanceCents = Math.round((totalPrice * paymentSettings.advance_percentage) / 100);
+      let newStatus = targetBooking?.status || 'pendiente';
+      if (newAdvance >= minAdvanceCents && newStatus === 'pendiente') {
+        newStatus = 'confirmada';
+      }
+      const payStatus = newAdvance >= totalPrice ? 'total' : newAdvance > 0 ? 'parcial' : 'sin_pago';
+
+      supabase.from('bookings').update({
+        advance_amount_cents: newAdvance,
+        balance_cents: Math.max(0, totalPrice - newAdvance),
+        status: newStatus,
+        payment_status: payStatus,
+        confirmed_at: newStatus === 'confirmada' ? (targetBooking?.confirmed_at || new Date().toISOString()) : null,
+      }).eq('id', bookingId).then(() => {
+        pulseRealtime();
+      });
+    }
   }, [bookings, paymentSettings.advance_percentage, pulseRealtime]);
 
   const voidPayment = useCallback((paymentId: string, reason: string) => {
-    // Only admin can void
     const payment = paymentLogs.find((p) => p.id === paymentId);
     if (!payment || payment.voided) return;
 
@@ -364,7 +838,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Adjust booking advance
     setBookings((prev) =>
       prev.map((b) => {
         if (b.id === payment.booking_id) {
@@ -385,9 +858,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
     pulseRealtime();
+
+    if (paymentId.includes('-') && paymentId.length === 36) {
+      supabase.from('payment_logs').update({
+        status: 'voided',
+        void_reason: reason,
+        voided_at: new Date().toISOString(),
+      }).eq('id', paymentId).then();
+    }
   }, [currentUser.name, paymentLogs, pulseRealtime]);
 
   const liberateServiceEarly = useCallback((bookingId: string, serviceIndex: number) => {
+    const nowIso = new Date().toISOString();
     const nowTime = new Date().toLocaleTimeString('es-PE', {
       timeZone: 'America/Lima',
       hour: '2-digit',
@@ -411,38 +893,141 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
     pulseRealtime();
+
+    if (bookingId.includes('-') && bookingId.length === 36) {
+      supabase
+        .from('booking_services')
+        .select('id')
+        .eq('booking_id', bookingId)
+        .order('created_at')
+        .then(({ data }) => {
+          if (data && data[serviceIndex]) {
+            supabase
+              .from('booking_services')
+              .update({
+                liberado_at: nowIso,
+                status: 'completada',
+              })
+              .eq('id', data[serviceIndex].id)
+              .then(() => {
+                pulseRealtime();
+              });
+          }
+        });
+    }
   }, [pulseRealtime]);
+
+  const deleteBooking = useCallback(async (bookingId: string): Promise<boolean> => {
+    try {
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      pulseRealtime();
+
+      if (bookingId.includes('-') && bookingId.length === 36) {
+        const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
+        if (error) {
+          console.error('Error al eliminar reserva en Supabase:', error);
+          fetchAllFromSupabase();
+          throw error;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error en deleteBooking:', err);
+      return false;
+    }
+  }, [fetchAllFromSupabase, pulseRealtime]);
+
+  const editBooking = useCallback(async (bookingId: string, updates: Partial<Booking>): Promise<boolean> => {
+    try {
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, ...updates } : b))
+      );
+      pulseRealtime();
+
+      if (bookingId.includes('-') && bookingId.length === 36) {
+        const dbUpdates: any = {};
+        if (updates.client_name) {
+          const parts = updates.client_name.trim().split(' ');
+          dbUpdates.client_first_name = parts[0] || '';
+          dbUpdates.client_last_name = parts.slice(1).join(' ') || '';
+        }
+        if (updates.client_phone !== undefined) dbUpdates.client_phone = updates.client_phone;
+        if (updates.client_email !== undefined) dbUpdates.client_email = updates.client_email;
+        if (updates.date !== undefined) dbUpdates.booking_date = updates.date;
+        if (updates.start_time !== undefined) dbUpdates.start_time = updates.start_time;
+        if (updates.end_time !== undefined) dbUpdates.end_time = updates.end_time;
+        if (updates.status !== undefined) dbUpdates.status = updates.status;
+        if (updates.total_price_cents !== undefined) dbUpdates.total_price_cents = updates.total_price_cents;
+        if (updates.advance_amount_cents !== undefined) {
+          dbUpdates.advance_amount_cents = updates.advance_amount_cents;
+          if (updates.total_price_cents !== undefined) {
+            dbUpdates.balance_cents = Math.max(0, updates.total_price_cents - updates.advance_amount_cents);
+          }
+        }
+
+        const { error } = await supabase.from('bookings').update(dbUpdates).eq('id', bookingId);
+        if (error) {
+          console.error('Error al actualizar reserva en Supabase:', error);
+          fetchAllFromSupabase();
+          throw error;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error en editBooking:', err);
+      return false;
+    }
+  }, [fetchAllFromSupabase, pulseRealtime]);
 
   // POS HANDLERS
   const registerVentaMostrador = useCallback((
-    ventaData: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'>
+    ventaData: Omit<VentaMostrador, 'id' | 'ticket_number' | 'created_at'> & { created_at?: string }
   ): VentaMostrador => {
     const today = getTodayDateString();
     const newVenta: VentaMostrador = {
       ...ventaData,
       id: `vnt-${Date.now()}`,
       ticket_number: `TK-${Math.floor(10000 + Math.random() * 90000)}`,
-      created_at: `${today}T12:00:00Z`,
+      created_at: ventaData.created_at || `${today}T12:00:00Z`,
     };
 
     setVentasMostrador((prev) => [newVenta, ...prev]);
 
-    // Deduct stock
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === ventaData.product_id
-          ? { ...p, stock: Math.max(0, p.stock - ventaData.quantity) }
-          : p
-      )
-    );
+    // Reducir stock únicamente si corresponde a un producto registrado del catálogo
+    if (ventaData.product_id) {
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === ventaData.product_id
+            ? { ...p, stock: Math.max(0, p.stock - ventaData.quantity) }
+            : p
+        )
+      );
+    }
 
     pulseRealtime();
+
+    // Guardar venta de mostrador en Supabase (destino autorizado acicaladosMej)
+    supabase.from('ventas_mostrador').insert({
+      cliente_nombre: ventaData.client_name,
+      producto_nombre: ventaData.product_name,
+      cantidad: ventaData.quantity,
+      precio_unitario: ventaData.unit_price_cents / 100,
+      total: ventaData.total_price_cents / 100,
+      metodo_pago: (ventaData.payment_method.charAt(0).toUpperCase() + ventaData.payment_method.slice(1)) as any,
+      notas: ventaData.notes || null,
+      ticket_number: newVenta.ticket_number,
+      fecha: newVenta.created_at,
+    } as any).then();
+
     return newVenta;
   }, [pulseRealtime]);
 
   const deleteVentaMostrador = useCallback((id: string) => {
     setVentasMostrador((prev) => prev.filter((v) => v.id !== id));
     pulseRealtime();
+    if (id.includes('-') && id.length === 36) {
+      supabase.from('ventas_mostrador').delete().eq('id', id).then();
+    }
   }, [pulseRealtime]);
 
   // EXPENSES HANDLERS
@@ -456,6 +1041,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setExpenses((prev) => [newExpense, ...prev]);
     pulseRealtime();
+
+    supabase.from('expenses').insert({
+      description: expenseData.description,
+      category: expenseData.category,
+      amount_cents: expenseData.amount_cents,
+      payment_method: expenseData.payment_method === 'efectivo' ? 'cash' : expenseData.payment_method,
+      expense_date: expenseData.date,
+      supplier: expenseData.beneficiary || null,
+      receipt_url: expenseData.voucher_url || null,
+      status: 'active',
+    }).then();
   }, [pulseRealtime]);
 
   const voidExpense = useCallback((expenseId: string, reason: string) => {
@@ -467,6 +1063,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
     pulseRealtime();
+
+    if (expenseId.includes('-') && expenseId.length === 36) {
+      supabase.from('expenses').update({
+        status: 'voided',
+        void_reason: reason,
+        voided_at: new Date().toISOString(),
+      }).eq('id', expenseId).then();
+    }
   }, [currentUser.name, pulseRealtime]);
 
   // EMPLOYEE & ATTENDANCE HANDLERS
@@ -479,21 +1083,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setEmployees((prev) => [...prev, newEmp]);
     pulseRealtime();
+
+    const names = empData.full_name.trim().split(' ');
+    const firstName = names[0] || 'Colaborador';
+    const lastName = names.slice(1).join(' ') || '';
+
+    supabase.from('employees').insert({
+      first_name: firstName,
+      last_name: lastName,
+      type: empData.type,
+      is_active: empData.active,
+      rotation_order: empData.rotation_order || 0,
+    }).then();
   }, [pulseRealtime]);
 
   const updateEmployee = useCallback((updated: Employee) => {
     setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     pulseRealtime();
+
+    if (updated.id.includes('-') && updated.id.length === 36) {
+      const names = updated.full_name.trim().split(' ');
+      supabase.from('employees').update({
+        first_name: names[0] || 'Colaborador',
+        last_name: names.slice(1).join(' ') || '',
+        type: updated.type,
+        is_active: updated.active,
+      }).eq('id', updated.id).then();
+    }
   }, [pulseRealtime]);
 
   const toggleEmployeeActive = useCallback((empId: string) => {
     setEmployees((prev) =>
-      prev.map((e) => (e.id === empId ? { ...e, active: !e.active } : e))
+      prev.map((e) => {
+        if (e.id === empId) {
+          const nextActive = !e.active;
+          if (empId.includes('-') && empId.length === 36) {
+            supabase.from('employees').update({ is_active: nextActive }).eq('id', empId).then();
+          }
+          return { ...e, active: nextActive };
+        }
+        return e;
+      })
     );
     pulseRealtime();
   }, [pulseRealtime]);
 
-  // Check-In / Check-Out QR Scanner with Lima Night Bonus Rule
+  // Check-In / Check-Out QR Scanner con cálculo de bonos según regla America/Lima
   const scanAttendanceQR = useCallback((qrCode: string): {
     success: boolean;
     message: string;
@@ -523,7 +1158,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `att-${Date.now()}`,
         employee_id: emp.id,
         employee_name: emp.full_name,
-        employee_type: emp.type,
+        employee_type: emp.type as any,
         date: today,
         check_in: nowLima,
         check_out: null,
@@ -534,6 +1169,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setAttendance((prev) => [newAtt, ...prev]);
       pulseRealtime();
+
+      if (emp.id.includes('-') && emp.id.length === 36) {
+        supabase.from('employee_attendances').insert({
+          employee_id: emp.id,
+          date: today,
+          status: nowLima > '09:05' ? 'tardanza' : 'presente',
+        }).then();
+      }
+
       return {
         success: true,
         message: `¡Check-In registrado exitosamente a las ${nowLima}!`,
@@ -543,16 +1187,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (currentAttendance && !currentAttendance.check_out) {
-      // Check-Out: Compute hours and Night Bonus Minutes (America/Lima)
+      // Check-Out con cálculo de bono nocturno
       const [inH, inM] = currentAttendance.check_in.split(':').map(Number);
       const [outH, outM] = nowLima.split(':').map(Number);
       const inMinutes = inH * 60 + inM;
       const outMinutes = outH * 60 + outM;
       const workedMinutes = Math.max(0, outMinutes - inMinutes);
 
-      // Night bonus calculation
-      // Rule: Monday-Saturday starts at 21:10 (1270 min); Sunday starts at 20:10 (1210 min)
-      const dayOfWeek = new Date().getDay(); // 0 is Sunday
+      const dayOfWeek = new Date().getDay();
       const cutoffStr = dayOfWeek === 0 ? bonusSettings.sunday_cutoff : bonusSettings.weekday_cutoff;
       const [cutH, cutM] = cutoffStr.split(':').map(Number);
       const cutoffMinutes = cutH * 60 + cutM;
@@ -577,6 +1219,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         )
       );
       pulseRealtime();
+
+      if (currentAttendance.id.includes('-') && currentAttendance.id.length === 36) {
+        supabase.from('employee_attendances').update({
+          check_out: new Date().toISOString(),
+          bonus_minutes: bonusMinutes,
+          bonus_calculation_type: 'auto',
+        }).eq('id', currentAttendance.id).then();
+      }
+
       return {
         success: true,
         message: `¡Check-Out registrado a las ${nowLima}! Minutos de bono nocturno calculados: ${bonusMinutes} min.`,
@@ -613,7 +1264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: `att-${Date.now()}`,
           employee_id: emp.id,
           employee_name: emp.full_name,
-          employee_type: emp.type,
+          employee_type: emp.type as any,
           date: today,
           check_in: nowLima,
           check_out: null,
@@ -661,7 +1312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: `att-${Date.now()}`,
             employee_id: emp.id,
             employee_name: emp.full_name,
-            employee_type: emp.type,
+            employee_type: emp.type as any,
             date: today,
             check_in: '09:00',
             check_out: nowLima,
@@ -693,6 +1344,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
     pulseRealtime();
+
+    if (attendanceId.includes('-') && attendanceId.length === 36) {
+      supabase.from('employee_attendances').update({
+        bonus_minutes: newBonusMinutes,
+        bonus_calculation_type: 'manual',
+        bonus_adjustment_reason: reason,
+      }).eq('id', attendanceId).then();
+    }
   }, [pulseRealtime]);
 
   const submitJustification = useCallback((attendanceId: string, note: string, docUrl?: string) => {
@@ -715,6 +1374,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updatePaymentSettings = useCallback((newSettings: Partial<PaymentSettings>) => {
     setPaymentSettings((prev) => ({ ...prev, ...newSettings }));
     pulseRealtime();
+    if (newSettings.advance_percentage) {
+      supabase.from('business_config').update({ advance_percentage: newSettings.advance_percentage }).eq('id', 1).then();
+    }
   }, [pulseRealtime]);
 
   const updateBonusSettings = useCallback((newSettings: Partial<BonusSettings>) => {
@@ -723,48 +1385,310 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [pulseRealtime]);
 
   // CATALOG CRUD
-  const addService = useCallback((srvData: Omit<Service, 'id'>) => {
-    const newSrv: Service = { ...srvData, id: `srv-${Date.now()}` };
-    setServices((prev) => [...prev, newSrv]);
-    pulseRealtime();
+  const addService = useCallback(async (srvData: Omit<Service, 'id'>): Promise<boolean> => {
+    try {
+      const slug = srvData.slug || srvData.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+      const insertPayload = {
+        name: srvData.name,
+        slug: slug,
+        description: srvData.description,
+        type: srvData.category,
+        price_cents: srvData.price_cents,
+        currency: 'PEN',
+        duration_minutes: srvData.duration_minutes,
+        capacity: srvData.capacity || 1,
+        staff_required: 1,
+        is_active: srvData.active !== undefined ? srvData.active : true,
+        is_public: srvData.active !== undefined ? srvData.active : true,
+        images: srvData.image_url ? [srvData.image_url] : [],
+      };
+
+      const { data, error } = await supabase
+        .from('services')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error al insertar servicio en Supabase:', error);
+        // Fallback local
+        const newSrv: Service = { ...srvData, id: `srv-${Date.now()}` };
+        setServices((prev) => [...prev, newSrv]);
+        pulseRealtime();
+        return true;
+      }
+
+      if (data) {
+        const newSrv: Service = {
+          id: data.id,
+          name: data.name,
+          slug: data.slug,
+          category: data.type as 'barberia' | 'spa',
+          price_cents: data.price_cents,
+          duration_minutes: data.duration_minutes,
+          capacity: data.capacity,
+          active: data.is_active,
+          image_url: data.images && data.images.length > 0 ? data.images[0] : srvData.image_url,
+          description: data.description || '',
+        };
+        setServices((prev) => [...prev, newSrv]);
+        pulseRealtime();
+        return true;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error adding service:', err);
+      return false;
+    }
   }, [pulseRealtime]);
 
-  const updateService = useCallback((srv: Service) => {
-    setServices((prev) => prev.map((s) => (s.id === srv.id ? s : s)));
-    pulseRealtime();
+  const updateService = useCallback(async (srv: Service): Promise<boolean> => {
+    try {
+      setServices((prev) => prev.map((s) => (s.id === srv.id ? srv : s)));
+      pulseRealtime();
+
+      if (srv.id.includes('-') && srv.id.length === 36) {
+        const { error } = await supabase.from('services').update({
+          name: srv.name,
+          slug: srv.slug,
+          type: srv.category,
+          price_cents: srv.price_cents,
+          duration_minutes: srv.duration_minutes,
+          description: srv.description,
+          is_active: srv.active,
+          is_public: srv.active,
+          images: srv.image_url ? [srv.image_url] : [],
+          updated_at: new Date().toISOString(),
+        }).eq('id', srv.id);
+
+        if (error) {
+          console.error('Error al actualizar servicio en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating service:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const deleteService = useCallback(async (serviceId: string): Promise<boolean> => {
+    try {
+      setServices((prev) => prev.filter((s) => s.id !== serviceId));
+      pulseRealtime();
+
+      if (serviceId.includes('-') && serviceId.length === 36) {
+        const { error } = await supabase.from('services').delete().eq('id', serviceId);
+        if (error) {
+          console.error('Error al eliminar servicio en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error deleting service:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const toggleServiceActive = useCallback(async (serviceId: string, currentActive: boolean): Promise<boolean> => {
+    try {
+      const nextActive = !currentActive;
+      setServices((prev) => prev.map((s) => (s.id === serviceId ? { ...s, active: nextActive } : s)));
+      pulseRealtime();
+
+      if (serviceId.includes('-') && serviceId.length === 36) {
+        const { error } = await supabase.from('services').update({
+          is_active: nextActive,
+          is_public: nextActive,
+          updated_at: new Date().toISOString(),
+        }).eq('id', serviceId);
+
+        if (error) {
+          console.error('Error al alternar estado de servicio en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error toggling service active:', err);
+      return false;
+    }
   }, [pulseRealtime]);
 
   const addProduct = useCallback((prodData: Omit<Product, 'id'>) => {
     const newProd: Product = { ...prodData, id: `prod-${Date.now()}` };
     setProducts((prev) => [...prev, newProd]);
     pulseRealtime();
+
+    supabase.from('products').insert({
+      name: prodData.name,
+      slug: prodData.slug,
+      description: prodData.description,
+      category: prodData.category,
+      price_cents: prodData.price_cents,
+      stock: prodData.stock,
+      images: [prodData.image_url],
+    }).then();
   }, [pulseRealtime]);
 
   const updateProduct = useCallback((prod: Product) => {
     setProducts((prev) => prev.map((p) => (p.id === prod.id ? prod : p)));
     pulseRealtime();
+
+    if (prod.id.includes('-') && prod.id.length === 36) {
+      supabase.from('products').update({
+        name: prod.name,
+        price_cents: prod.price_cents,
+        stock: prod.stock,
+      }).eq('id', prod.id).then();
+    }
   }, [pulseRealtime]);
 
-  const addWardrobeItem = useCallback((itemData: Omit<WardrobeItem, 'id'>) => {
-    const newItem: WardrobeItem = { ...itemData, id: `ward-${Date.now()}` };
-    setWardrobe((prev) => [...prev, newItem]);
-    pulseRealtime();
+  const addWardrobeItem = useCallback(async (itemData: Omit<WardrobeItem, 'id'>): Promise<boolean> => {
+    try {
+      const codeUpper = (itemData.code || 'A').toUpperCase().trim();
+      const insertPayload = {
+        name: itemData.name,
+        code: codeUpper,
+        description: itemData.description,
+        category: itemData.category,
+        price_cents: itemData.rental_price_cents,
+        deposit_cents: itemData.deposit_cents || 0,
+        availability_status: itemData.status || 'disponible',
+        is_active: itemData.active !== undefined ? itemData.active : true,
+        images: itemData.image_url ? [itemData.image_url] : [],
+        section: itemData.size || 'Standard / Ajustable',
+      };
+
+      const { data, error } = await supabase
+        .from('wardrobe_items')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error al insertar prenda de vestuario en Supabase:', error);
+        // Fallback local
+        const newItem: WardrobeItem = { ...itemData, code: codeUpper, id: `ward-${Date.now()}` };
+        setWardrobe((prev) => [...prev, newItem]);
+        pulseRealtime();
+        return true;
+      }
+
+      if (data) {
+        const newItem: WardrobeItem = {
+          id: data.id,
+          code: (data.code || codeUpper).toUpperCase().trim(),
+          name: data.name,
+          category: data.category || 'Bodas y Matrimonio',
+          rental_price_cents: data.price_cents,
+          deposit_cents: data.deposit_cents || 0,
+          status: (data.availability_status || 'disponible') as WardrobeStatus,
+          active: data.is_active !== undefined ? data.is_active : true,
+          image_url: data.images && data.images.length > 0 ? data.images[0] : itemData.image_url,
+          size: data.section || itemData.size || 'Standard / Ajustable',
+          description: data.description || '',
+        };
+        setWardrobe((prev) => [...prev, newItem]);
+        pulseRealtime();
+        return true;
+      }
+      return true;
+    } catch (err) {
+      console.error('Error adding wardrobe item:', err);
+      return false;
+    }
   }, [pulseRealtime]);
 
-  const updateWardrobeItem = useCallback((item: WardrobeItem) => {
-    setWardrobe((prev) => prev.map((w) => (w.id === item.id ? item : w)));
-    pulseRealtime();
+  const updateWardrobeItem = useCallback(async (item: WardrobeItem): Promise<boolean> => {
+    try {
+      const codeUpper = (item.code || 'A').toUpperCase().trim();
+      const updatedItem = { ...item, code: codeUpper };
+      setWardrobe((prev) => prev.map((w) => (w.id === item.id ? updatedItem : w)));
+      pulseRealtime();
+
+      if (item.id.includes('-') && item.id.length === 36) {
+        const { error } = await supabase.from('wardrobe_items').update({
+          name: item.name,
+          code: codeUpper,
+          description: item.description,
+          category: item.category,
+          price_cents: item.rental_price_cents,
+          deposit_cents: item.deposit_cents,
+          availability_status: item.status,
+          is_active: item.active !== undefined ? item.active : true,
+          images: item.image_url ? [item.image_url] : [],
+          section: item.size,
+          updated_at: new Date().toISOString(),
+        }).eq('id', item.id);
+
+        if (error) {
+          console.error('Error al actualizar prenda de vestuario en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating wardrobe item:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const deleteWardrobeItem = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      setWardrobe((prev) => prev.filter((w) => w.id !== id));
+      pulseRealtime();
+
+      if (id.includes('-') && id.length === 36) {
+        const { error } = await supabase.from('wardrobe_items').delete().eq('id', id);
+        if (error) {
+          console.error('Error al eliminar prenda en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error deleting wardrobe item:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const toggleWardrobeActive = useCallback(async (id: string, currentActive: boolean): Promise<boolean> => {
+    try {
+      const nextActive = !currentActive;
+      setWardrobe((prev) => prev.map((w) => (w.id === id ? { ...w, active: nextActive } : w)));
+      pulseRealtime();
+
+      if (id.includes('-') && id.length === 36) {
+        const { error } = await supabase.from('wardrobe_items').update({
+          is_active: nextActive,
+          updated_at: new Date().toISOString(),
+        }).eq('id', id);
+
+        if (error) {
+          console.error('Error al alternar visibilidad de vestuario en Supabase:', error);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error toggling wardrobe active state:', err);
+      return false;
+    }
   }, [pulseRealtime]);
 
   const updateWardrobeStatus = useCallback((id: string, status: WardrobeStatus) => {
     setWardrobe((prev) => prev.map((w) => (w.id === id ? { ...w, status } : w)));
     pulseRealtime();
+
+    if (id.includes('-') && id.length === 36) {
+      supabase.from('wardrobe_items').update({ availability_status: status }).eq('id', id).then();
+    }
   }, [pulseRealtime]);
 
-  // KPI CALCULATIONS (Strict rules from Section C.1 & C.5)
-  // Regla Estricta de Ingresos: Solo citas 'confirmada' o 'completada' aportan al total cobrado (advance_amount_cents)
-  // Ventas de mostrador activas suman al total de ingresos brutos
-  // Egresos activos (no voided) se descuentan para el balance neto
+  // KPI CALCULATIONS (Reglas oficiales: Section C.1 & C.5)
   const kpis = useMemo(() => {
     const today = getTodayDateString();
 
@@ -795,7 +1719,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const citasHoy = bookings.filter((b) => b.date === today);
     const citasConfirmadas = bookings.filter((b) => b.status === 'confirmada');
 
-    // Saldos por cobrar: De citas confirmadas que aún no tienen pago total
     const saldosPorCobrarCents = confirmedBookings.reduce((acc, b) => {
       const saldo = b.total_price_cents - (b.advance_amount_cents || 0);
       return acc + (saldo > 0 ? saldo : 0);
@@ -815,10 +1738,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentRole,
-        setCurrentRole,
         activeView,
         setActiveView,
         currentUser,
+        signOut,
         services,
         products,
         wardrobe,
@@ -845,11 +1768,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         realtimeConnected,
         pulseRealtime,
         lastSyncTimestamp,
+        refreshData: fetchAllFromSupabase,
         addBooking,
         updateBookingStatus,
         registerBookingPayment,
         voidPayment,
         liberateServiceEarly,
+        deleteBooking,
+        editBooking,
         registerVentaMostrador,
         registerCounterSale: registerVentaMostrador,
         deleteVentaMostrador,
@@ -866,10 +1792,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBonusSettings,
         addService,
         updateService,
+        deleteService,
+        toggleServiceActive,
         addProduct,
         updateProduct,
         addWardrobeItem,
         updateWardrobeItem,
+        deleteWardrobeItem,
+        toggleWardrobeActive,
         updateWardrobeStatus,
         kpis,
       }}

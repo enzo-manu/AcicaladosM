@@ -12,201 +12,187 @@ import {
   Sparkles,
   Shirt,
   Package,
+  User,
   LogOut,
-  ExternalLink,
   ChevronRight,
   Menu,
   X,
-  Radio,
 } from 'lucide-react';
 
 export const AdminSidebar: React.FC = () => {
-  const { activeView, setActiveView, currentRole, currentUser, setCurrentRole, realtimeConnected, lastSyncTimestamp } = useApp();
+  const { activeView, setActiveView, currentRole, currentUser, signOut } = useApp();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-  // Menu item matrix based on Section B.2
+  // Exact 11 short, concise module names in this exact order:
+  // Inicio | Calendario | Reservas | Ventas | Reportes | Egresos | Empleados | Asistencia | Servicios | Vestuario | Productos
   const menuItems = [
     {
       view: '/dashboard',
-      label: 'Inicio / Recepción',
+      label: 'Inicio',
       icon: <Home className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista', 'empleado'],
     },
     {
       view: '/dashboard/calendario',
-      label: 'Calendario y Turnos',
+      label: 'Calendario',
       icon: <Calendar className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/reservas',
-      label: 'Reservas y Caja Citas',
+      label: 'Reservas',
       icon: <BookOpen className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/ventas',
-      label: 'Ventas Mostrador (POS)',
+      label: 'Ventas',
       icon: <DollarSign className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/reportes',
-      label: currentRole === 'recepcionista' ? 'Reportes (Día Actual)' : 'Reportes y Cierre Caja',
+      label: 'Reportes',
       icon: <FileText className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
-      badge: currentRole === 'recepcionista' ? 'Hoy' : undefined,
     },
     {
       view: '/dashboard/egresos',
-      label: 'Egresos y Gastos',
+      label: 'Egresos',
       icon: <TrendingDown className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/empleados',
-      label: 'Personal y Asignaciones',
+      label: 'Empleados',
       icon: <Users className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/asistencia',
-      label: 'Asistencia y Scanner QR',
+      label: 'Asistencia',
       icon: <Clock className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista', 'empleado'],
     },
     {
       view: '/dashboard/servicios',
-      label: 'Catálogo de Servicios',
+      label: 'Servicios',
       icon: <Sparkles className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/vestuario',
-      label: 'Galería de Vestuario',
+      label: 'Vestuario',
       icon: <Shirt className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
     {
       view: '/dashboard/productos',
-      label: 'Catálogo de Productos',
+      label: 'Productos',
       icon: <Package className="w-4 h-4" />,
-      roles: ['admin', 'recepcionista'],
     },
   ];
-
-  const filteredMenuItems = menuItems.filter((item) =>
-    item.roles.includes(currentRole)
-  );
 
   const handleNavigate = (view: string) => {
     setActiveView(view);
     setMobileDrawerOpen(false);
   };
 
-  const handleLogout = () => {
-    setCurrentRole('anon');
+  const handleLogout = async () => {
+    await signOut();
     setActiveView('/');
   };
 
+  // Role display badge in sobrio style
+  const roleDisplay = currentRole === 'admin' ? 'Admin' : currentRole === 'recepcionista' ? 'Recepción' : 'Admin';
+
   return (
     <>
-      {/* Mobile Bar for Dashboard View */}
-      <div className="lg:hidden flex items-center justify-between p-3.5 bg-[#111111] border-b border-[#C8A45C]/20 sticky top-0 z-30">
+      {/* Mobile Top Bar for Dashboard View */}
+      <div className="lg:hidden flex items-center justify-between p-3.5 bg-[#0E0E0E] border-b border-[#C8A45C]/20 sticky top-0 z-30">
         <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => setMobileDrawerOpen(true)}
-            className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
+            className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-[#C8A45C] hover:text-white cursor-pointer"
+            title="Abrir Menú"
+            aria-label="Abrir Menú"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="font-serif-luxury font-bold text-sm text-white">ACICALADOS DASHBOARD</span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveView('/')}
-            className="text-xs text-[#C8A45C] hover:underline flex items-center gap-1"
-          >
-            <ExternalLink className="w-3 h-3" />
-            <span>Portal Web</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <img
+              src="/LogoAcicalados.svg"
+              alt="Logo Acicalados"
+              className="h-6 w-auto object-contain"
+            />
+            <span className="font-serif-luxury font-bold text-sm text-[#C8A45C] tracking-wider">
+              ACICALADOS
+            </span>
+            <span className="text-[10px] text-neutral-400 font-medium">
+              · Panel de Gestión
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Mobile Drawer Overlay */}
       {mobileDrawerOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
+          className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm transition-opacity"
           onClick={() => setMobileDrawerOpen(false)}
         />
       )}
 
       {/* Main Sidebar (Desktop fixed 260px, Mobile drawer) */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-[#0E0E0E] border-r border-[#C8A45C]/20 flex flex-col justify-between transition-transform duration-300 ${
+        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-[#0E0E0E] border-r border-[#C8A45C]/20 flex flex-col justify-between transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.85)] ${
           mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Top 3px Golden Gradient Progress Indicator */}
-        <div className="h-[3px] w-full bg-gradient-to-r from-[#9A7B38] via-[#E6C875] to-[#9A7B38]" />
+        <div className="h-[3px] w-full bg-gradient-to-r from-[#9A7B38] via-[#E6C875] to-[#9A7B38] shrink-0" />
 
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-neutral-800/80">
+        {/* 1. Cabecera del Sidebar */}
+        <div className="p-4 border-b border-neutral-800/80 shrink-0">
           <div className="flex items-center justify-between">
             <button
+              type="button"
               onClick={() => handleNavigate('/dashboard')}
-              className="flex items-center gap-2.5 text-left group"
+              className="flex items-center gap-3 text-left group cursor-pointer focus:outline-none"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C8A45C] to-[#9A7B38] flex items-center justify-center text-black font-bold shadow">
-                A
-              </div>
-              <div>
-                <span className="font-serif-luxury text-sm font-bold text-white tracking-wider block">
+              {/* Emblema dorado del logo */}
+              <img
+                src="/LogoAcicalados.svg"
+                alt="Logo Acicalados"
+                className="h-8 w-auto object-contain transition-transform duration-200 group-hover:scale-105 shrink-0"
+              />
+
+              {/* Título y subtítulo simple */}
+              <div className="flex flex-col justify-center select-none">
+                <span className="font-serif-luxury font-bold text-base tracking-[0.18em] text-[#C8A45C] group-hover:text-[#EBDBB2] transition-colors leading-none">
                   ACICALADOS
                 </span>
-                <span className="text-[9px] uppercase tracking-widest text-[#C8A45C] font-semibold block">
-                  Panel de Gestión v2.6
+                <span className="text-[10px] tracking-wider text-neutral-400 font-medium leading-none mt-1.5">
+                  Panel de Gestión
                 </span>
               </div>
             </button>
 
+            {/* Mobile close button */}
             {mobileDrawerOpen && (
               <button
                 type="button"
                 onClick={() => setMobileDrawerOpen(false)}
-                className="lg:hidden p-1 text-neutral-400 hover:text-white"
+                className="lg:hidden p-1 text-neutral-400 hover:text-white cursor-pointer"
+                aria-label="Cerrar Menú"
               >
                 <X className="w-5 h-5" />
               </button>
             )}
           </div>
-
-          {/* Realtime Supabase Connection Badge */}
-          <div className="mt-3 flex items-center justify-between px-2.5 py-1 rounded bg-[#161616] border border-neutral-800 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span className="text-neutral-300">Supabase Realtime</span>
-            </div>
-            <span className="text-[10px] text-emerald-400 font-semibold">En vivo</span>
-          </div>
         </div>
 
-        {/* Navigation Menu */}
+        {/* 2. Lista de Módulos (Exactamente los 11 nombres) */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          <div className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-            Módulos del Sistema
-          </div>
-
-          {filteredMenuItems.map((item) => {
+          {menuItems.map((item) => {
             const isActive = activeView === item.view;
             return (
               <button
                 key={item.view}
                 id={`sidebar-link-${item.view.replace('/dashboard/', '') || 'inicio'}`}
                 onClick={() => handleNavigate(item.view)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium transition cursor-pointer ${
                   isActive
                     ? 'bg-[#1C1A14] text-[#E6C875] border border-[#C8A45C]/40 shadow-sm font-semibold'
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-[#161616]'
@@ -219,61 +205,41 @@ export const AdminSidebar: React.FC = () => {
                   <span className="truncate">{item.label}</span>
                 </div>
 
-                {item.badge && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#C8A45C]/20 text-[#E6C875] font-bold border border-[#C8A45C]/30">
-                    {item.badge}
-                  </span>
-                )}
-                {isActive && !item.badge && (
-                  <ChevronRight className="w-3 h-3 text-[#C8A45C]" />
+                {isActive && (
+                  <ChevronRight className="w-3.5 h-3.5 text-[#C8A45C]" />
                 )}
               </button>
             );
           })}
-
-          <div className="pt-3 border-t border-neutral-800/80 my-2">
-            <button
-              onClick={() => setActiveView('/')}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-900 transition"
-            >
-              <ExternalLink className="w-4 h-4 text-neutral-500" />
-              <span>Ver Portal Público</span>
-            </button>
-          </div>
         </nav>
 
-        {/* Sidebar Footer (User identification, role badge & sign out) */}
-        <div className="p-3 border-t border-[#C8A45C]/20 bg-[#121212]">
-          <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg bg-[#181818] border border-neutral-800 mb-2">
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="w-8 h-8 rounded-full object-cover border border-[#C8A45C]/40 flex-shrink-0"
-              referrerPolicy="no-referrer"
-            />
+        {/* 3. Pie del Sidebar (Perfil y Cierre de Sesión) */}
+        <div className="p-3 border-t border-[#C8A45C]/20 bg-[#121212] shrink-0">
+          <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-[#181818] border border-neutral-800 mb-2.5">
+            {/* Avatar con ícono de silueta en relieve/borde dorado */}
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#1C1A14] to-[#121212] border border-[#C8A45C]/50 flex items-center justify-center text-[#C8A45C] shadow-inner shrink-0">
+              <User className="w-4 h-4 text-[#C8A45C]" />
+            </div>
+
+            {/* Nombre completo y badge con rol sobrio */}
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-white truncate">{currentUser.name}</p>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span
-                  className={`text-[9px] px-1.5 py-0.2 rounded uppercase font-bold tracking-wider ${
-                    currentRole === 'admin'
-                      ? 'badge-gold'
-                      : currentRole === 'recepcionista'
-                      ? 'bg-blue-900/30 text-blue-300 border border-blue-500/30'
-                      : 'bg-emerald-900/30 text-emerald-300 border border-emerald-500/30'
-                  }`}
-                >
-                  {currentRole}
+              <p className="text-xs font-semibold text-white truncate leading-tight">
+                {currentUser?.name || 'Administrador'}
+              </p>
+              <div className="flex items-center gap-1 mt-1">
+                <span className="text-[9px] px-2 py-0.5 rounded bg-[#C8A45C]/15 text-[#E6C875] border border-[#C8A45C]/30 font-medium tracking-wide">
+                  {roleDisplay}
                 </span>
               </div>
             </div>
           </div>
 
+          {/* Botón independiente para Cerrar Sesión */}
           <button
             id="sidebar-logout-btn"
             type="button"
             onClick={handleLogout}
-            className="w-full py-2 px-3 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 flex items-center justify-center gap-2 transition"
+            className="w-full py-2 px-3 rounded-lg text-xs font-medium text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 flex items-center justify-center gap-2 transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Cerrar Sesión</span>

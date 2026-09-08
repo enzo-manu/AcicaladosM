@@ -1,6 +1,5 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { RoleSwitcher } from './components/common/RoleSwitcher';
 import { TicketTermicoModal } from './components/common/TicketTermicoModal';
 import { CartDrawer } from './components/common/CartDrawer';
 import { Navbar } from './components/common/Navbar';
@@ -15,8 +14,13 @@ import { PublicWardrobe } from './components/public/PublicWardrobe';
 import { PublicLocation } from './components/public/PublicLocation';
 import { ClientPortal } from './components/public/ClientPortal';
 
+// Auth views
+import { LoginView } from './components/auth/LoginView';
+import { AuthCallback } from './components/auth/AuthCallback';
+
 // Dashboard views
 import { DashboardHome } from './components/dashboard/DashboardHome';
+import { CalendarioView } from './components/dashboard/CalendarioView';
 import { ReservasManager } from './components/dashboard/ReservasManager';
 import { POSView } from './components/dashboard/POSView';
 import { AsistenciaView } from './components/dashboard/AsistenciaView';
@@ -24,6 +28,7 @@ import { FinanzasView } from './components/dashboard/FinanzasView';
 import { ColaboradoresView } from './components/dashboard/ColaboradoresView';
 import { VestuarioManager } from './components/dashboard/VestuarioManager';
 import { ReportesView } from './components/dashboard/ReportesView';
+import { ServiciosManager } from './components/dashboard/ServiciosManager';
 
 import { MapPin, Phone, ShieldCheck, Scissors } from 'lucide-react';
 
@@ -31,22 +36,36 @@ const AppContent: React.FC = () => {
   const { activeView, setActiveView, currentRole } = useApp();
 
   const isDashboard = activeView.startsWith('/dashboard');
+  const isAuthView = activeView === '/auth/login' || activeView === '/auth/callback';
 
   // Check RBAC permission for dashboard
-  const isPublicRole = currentRole === 'anonimo' || currentRole === 'cliente';
+  const isPublicRole = currentRole === 'anonimo' || currentRole === 'cliente' || currentRole === 'anon';
+
+  // Redirección inmediata: bloquear a clientes de /dashboard/* y enviarlos a /mi-cuenta
+  React.useEffect(() => {
+    if (isDashboard && isPublicRole) {
+      setActiveView('/mi-cuenta');
+    }
+  }, [isDashboard, isPublicRole, setActiveView]);
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black">
-      {/* Simulation Banner for testing all roles */}
-      <RoleSwitcher />
-
       {/* Global Thermal Ticket Modal */}
       <TicketTermicoModal />
 
       {/* Global Shopping Cart Drawer */}
       <CartDrawer />
 
-      {isDashboard ? (
+      {isAuthView ? (
+        // AUTHENTICATION LAYOUT (/auth/login & /auth/callback)
+        <div className="flex-1 flex flex-col">
+          <Navbar />
+          <main className="flex-1">
+            {activeView === '/auth/login' && <LoginView />}
+            {activeView === '/auth/callback' && <AuthCallback />}
+          </main>
+        </div>
+      ) : isDashboard ? (
         // DASHBOARD LAYOUT
         <div className="flex-1 flex flex-col md:flex-row min-h-screen">
           <AdminSidebar />
@@ -60,26 +79,29 @@ const AppContent: React.FC = () => {
                   Acceso Restringido al Personal
                 </h2>
                 <p className="text-xs text-neutral-400">
-                  Actualmente tienes el rol de <span className="text-[#C8A45C] font-semibold">{currentRole}</span>. Cambia a <span className="text-white font-semibold">Administrador</span> o <span className="text-white font-semibold">Recepción</span> en la barra superior para explorar la intranet operativa.
+                  El acceso a las rutas operativas del sistema está reservado exclusivamente para Administradores y Recepción. Redirigiendo a tu portal de cliente...
                 </p>
                 <button
                   type="button"
-                  onClick={() => setActiveView('/')}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#C8A45C] text-black shadow"
+                  onClick={() => setActiveView('/mi-cuenta')}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#C8A45C] text-black shadow cursor-pointer"
                 >
-                  Regresar a la Web Pública
+                  Ir a Mis Citas / Mi Cuenta
                 </button>
               </div>
             ) : (
               <>
                 {activeView === '/dashboard' && <DashboardHome />}
+                {activeView === '/dashboard/calendario' && <CalendarioView />}
                 {activeView === '/dashboard/reservas' && <ReservasManager />}
                 {activeView === '/dashboard/ventas' && <POSView />}
-                {activeView === '/dashboard/asistencia' && <AsistenciaView />}
-                {activeView === '/dashboard/finanzas' && <FinanzasView />}
-                {activeView === '/dashboard/colaboradores' && <ColaboradoresView />}
-                {activeView === '/dashboard/vestuario' && <VestuarioManager />}
                 {activeView === '/dashboard/reportes' && <ReportesView />}
+                {(activeView === '/dashboard/egresos' || activeView === '/dashboard/finanzas') && <FinanzasView />}
+                {(activeView === '/dashboard/empleados' || activeView === '/dashboard/colaboradores') && <ColaboradoresView />}
+                {activeView === '/dashboard/asistencia' && <AsistenciaView />}
+                {activeView === '/dashboard/servicios' && <ServiciosManager />}
+                {activeView === '/dashboard/vestuario' && <VestuarioManager />}
+                {activeView === '/dashboard/productos' && <PublicShop />}
               </>
             )}
           </main>
@@ -92,7 +114,7 @@ const AppContent: React.FC = () => {
             {activeView === '/' && <PublicLanding />}
             {activeView === '/servicios' && <PublicServices />}
             {activeView === '/reservar' && <PublicBookingFlow />}
-            {activeView === '/tienda' && <PublicShop />}
+            {(activeView === '/tienda' || activeView === '/productos') && <PublicShop />}
             {activeView === '/vestuario' && <PublicWardrobe />}
             {activeView === '/ubicacion' && <PublicLocation />}
             {activeView === '/mi-cuenta' && <ClientPortal />}

@@ -35,13 +35,22 @@ export interface Product {
 
 export type WardrobeStatus = 'disponible' | 'reservado' | 'en_uso' | 'mantenimiento';
 
+export type WardrobeCategory =
+  | 'Bodas y Matrimonio'
+  | 'Quinceañeras'
+  | 'Gala y Noche'
+  | 'Trajes Típicos y Costumbristas'
+  | 'Casual y Sesiones de Fotos';
+
 export interface WardrobeItem {
   id: string;
+  code?: string;
   name: string;
-  category: 'bodas' | 'quinceañeras' | 'graduaciones' | 'etiqueta_negra';
+  category: WardrobeCategory | string;
   rental_price_cents: number;
   deposit_cents: number;
   status: WardrobeStatus;
+  active?: boolean;
   image_url: string;
   size: string;
   description: string;
@@ -155,7 +164,7 @@ export interface VentaMostrador {
   id: string;
   ticket_number: string;
   client_name: string;
-  product_id: string;
+  product_id?: string;
   product_name: string;
   quantity: number;
   unit_price_cents: number;
