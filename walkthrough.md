@@ -1,10 +1,40 @@
-# Walkthrough: Módulo de Asistencia con Escaneo QR, Control de Puntualidad y Configuración de Turnos
+# Walkthrough: Módulo de Asistencia QR y Módulo Público de Ubicación con Google Maps
 
-Se ha actualizado e integrado completamente el módulo de Asistencia (`/dashboard/asistencia`) en Acicalados Spa & Barber Shop, conectándolo con Supabase (`ydvqzgyhymjgbyfkxqhd`), incorporando el lector de códigos QR biométricos para fotochecks, el cálculo automático de puntualidad/tardanzas, horas extra a favor del trabajador y la configuración de turnos y tolerancias exclusiva para administradores.
+Se han implementado y verificado las siguientes soluciones en el proyecto Acicalados Spa & Barber Shop:
+1. **Módulo de Asistencia QR (`/dashboard/asistencia`)**: control de puntualidad, tolerancias y horas extra.
+2. **Módulo Público de Ubicación (`/ubicacion`)**: integración real y responsiva de Google Maps para la sede oficial de Pichari.
 
 ---
 
-## 1. Migración y Base de Datos Supabase (`ydvqzgyhymjgbyfkxqhd`)
+## 1. Módulo Público de Ubicación con Google Maps Real ([`PublicLocation.tsx`](file:///d:/SistemasMANU/AcicaladosM/src/components/public/PublicLocation.tsx))
+
+Se implementó la pantalla pública en `/ubicacion` con la identidad oscura de lujo y los datos oficiales de la sede:
+
+### A. Tarjeta Informativa del Establecimiento (Columna Izquierda / Superior Móvil):
+- **Título Oficial**: *"Spa Acicalados Barber Shop"*
+- **Calificación y Reseñas**: Badge *"4.2 ★ (Google Reviews)"* con estrella dorada verificada.
+- **Dirección**: *"Av. Arriba Perú Mz. K - Lt. 9, Pichari 08850"*
+- **Punto de Referencia**: *"Cercanías a la Plaza Mayor de Pichari"* (a 2 minutos caminando).
+- **Plus Code de Google**: `"F5J9+PX9 Pichari"` con botón interactivo de copiado en un clic y feedback visual (*¡Copiado!*).
+- **Estado de Apertura en Vivo**: Indicador dinámico *"Abierto Ahora"* según la hora oficial de Lima y día de la semana.
+- **Horarios de Atención**: Lunes a Sábado 08:30 - 21:00, Domingos y Feriados 09:30 - 20:00.
+- **Canales de Atención Directa**: Enlace de llamada y botón para chatear por WhatsApp con recepción (`+51 987 654 321`).
+- **Botón de Acción Destacado (CTA Dorado)**:
+  - *"Cómo llegar / Abrir en Google Maps"* con enlace directo a la ficha oficial de Google Maps de la barbería en Pichari.
+
+### B. Contenedor de Mapa Interactivo (Columna Derecha / Principal):
+- **Iframe oficial incrustado**:
+  - `src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3894.9700706224057!2d-73.8301556!3d-12.5181417!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x910d3d42e669f4f9%3A0x2aca54dcda907e97!2sSpa%20Acicalados%20Barber%20Shop!5e0!3m2!1sen!2spe!4v1788895596216!5m2!1sen!2spe"`
+  - Atributos: `allowFullScreen`, `loading="lazy"`, `referrerPolicy="strict-origin-when-cross-origin"`.
+  - Altura responsiva: `min-h-[440px]` en móvil y `min-h-[580px]` en escritorio.
+  - Marco estético con borde dorado sutil (`border-[#C8A45C]/35`), sombra profunda y barra superior con coordenadas GPS y botón de pantalla completa.
+  - Navegación, arrastre y zoom 100% operativos sin restricciones.
+
+### C. Franja de Comodidades y Servicios del Local:
+- Estacionamiento vigilado para clientes.
+- Bebidas de cortesía (café espresso y bar lounge).
+- Wifi de alta velocidad para clientes.
+- Múltiples medios de pago (Yape, Plin, Tarjetas, Efectivo).
 
 Se crearon y actualizaron las estructuras correspondientes en la base de datos de Supabase autorizada:
 

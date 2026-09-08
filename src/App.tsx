@@ -135,7 +135,7 @@ const AppContent: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
-                    Club exclusivo de cuidado personal masculino y estética integral en San Borja, Lima. Experiencia multisensorial con bebidas de cortesía y especialistas de primer nivel.
+                    Club exclusivo de cuidado personal masculino y estética integral en Pichari, Cusco. Experiencia multisensorial con bebidas de cortesía y especialistas de primer nivel.
                   </p>
                 </div>
 
@@ -168,10 +168,10 @@ const AppContent: React.FC = () => {
 
                 {/* Contact & Hours */}
                 <div className="space-y-2 text-xs text-neutral-400">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">Sede San Borja</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">Sede Pichari</h4>
                   <p className="flex items-center gap-1.5 text-neutral-300">
                     <MapPin className="w-3.5 h-3.5 text-[#C8A45C]" />
-                    <span>Av. Javier Prado Este 2450, San Borja</span>
+                    <span>Av. Arriba Perú Mz. K - Lt. 9, Pichari</span>
                   </p>
                   <p className="flex items-center gap-1.5 text-neutral-300">
                     <Phone className="w-3.5 h-3.5 text-[#C8A45C]" />

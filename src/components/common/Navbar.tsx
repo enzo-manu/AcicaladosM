@@ -105,7 +105,7 @@ export const Navbar: React.FC = () => {
     { title: 'Trajes y Ternas Exclusivos', category: 'Vestuario', view: '/vestuario', desc: 'Alquiler y venta de alta costura para eventos' },
     { title: 'Pomadas y Ceras para Barba', category: 'Productos', view: '/productos', desc: 'Fijación y brillo de calidad profesional' },
     { title: 'Shampoo y Tónicos Capilares', category: 'Productos', view: '/productos', desc: 'Cuidado capilar anticaída y fortalecedor' },
-    { title: 'Sede San Borja y Horarios', category: 'Ubicación', view: '/ubicacion', desc: 'Encuéntranos en Av. Javier Prado Este 2450' },
+    { title: 'Sede Pichari y Horarios', category: 'Ubicación', view: '/ubicacion', desc: 'Encuéntranos en Av. Arriba Perú Mz. K - Lt. 9, Pichari' },
   ];
 
   const filteredSearch = searchQuery.trim()
