@@ -497,29 +497,44 @@ export type Database = {
         Row: {
           block_date: string
           created_at: string
+          document_url: string | null
           employee_id: string
+          end_date: string | null
           end_time: string | null
           id: string
+          is_full_day: boolean | null
+          leave_type: string | null
           reason: string | null
           start_time: string | null
+          status: string | null
         }
         Insert: {
           block_date: string
           created_at?: string
+          document_url?: string | null
           employee_id: string
+          end_date?: string | null
           end_time?: string | null
           id?: string
+          is_full_day?: boolean | null
+          leave_type?: string | null
           reason?: string | null
           start_time?: string | null
+          status?: string | null
         }
         Update: {
           block_date?: string
           created_at?: string
+          document_url?: string | null
           employee_id?: string
+          end_date?: string | null
           end_time?: string | null
           id?: string
+          is_full_day?: boolean | null
+          leave_type?: string | null
           reason?: string | null
           start_time?: string | null
+          status?: string | null
         }
         Relationships: [
           {
@@ -607,35 +622,59 @@ export type Database = {
       }
       employees: {
         Row: {
+          avatar_url: string | null
+          commission_percentage: number | null
           created_at: string
+          dni: string | null
+          email: string | null
           first_name: string
+          handles_reception: boolean | null
           id: string
           is_active: boolean
           last_name: string
+          phone: string | null
           profile_id: string | null
           rotation_order: number
+          shift_end: string | null
+          shift_start: string | null
           type: string
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
+          commission_percentage?: number | null
           created_at?: string
+          dni?: string | null
+          email?: string | null
           first_name: string
+          handles_reception?: boolean | null
           id?: string
           is_active?: boolean
           last_name: string
+          phone?: string | null
           profile_id?: string | null
           rotation_order?: number
+          shift_end?: string | null
+          shift_start?: string | null
           type: string
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
+          commission_percentage?: number | null
           created_at?: string
+          dni?: string | null
+          email?: string | null
           first_name?: string
+          handles_reception?: boolean | null
           id?: string
           is_active?: boolean
           last_name?: string
+          phone?: string | null
           profile_id?: string | null
           rotation_order?: number
+          shift_end?: string | null
+          shift_start?: string | null
           type?: string
           updated_at?: string
         }

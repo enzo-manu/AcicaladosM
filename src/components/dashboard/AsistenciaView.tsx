@@ -216,8 +216,13 @@ export const AsistenciaView: React.FC = () => {
                     />
                     <div>
                       <span className="font-semibold text-white block">{emp.full_name}</span>
-                      <span className="text-[10px] text-neutral-400 capitalize">
-                        {emp.type} • Horario: {emp.shift_start} - {emp.shift_end}
+                      <span className="text-[10px] text-neutral-400">
+                        {emp.type === 'barbero' || emp.type === 'barberia'
+                          ? 'Barbero'
+                          : emp.type === 'spa'
+                          ? 'Spa'
+                          : 'Recepcionista'}{' '}
+                        • Horario: {emp.shift_start} - {emp.shift_end}
                       </span>
                     </div>
                   </div>

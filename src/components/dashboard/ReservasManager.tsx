@@ -28,6 +28,7 @@ export const ReservasManager: React.FC = () => {
     bookings,
     services,
     employees,
+    employeeBlocks,
     paymentLogs,
     currentRole,
     paymentSettings,
@@ -257,6 +258,24 @@ export const ReservasManager: React.FC = () => {
     const endH = Math.floor(endMinutes / 60);
     const endM = endMinutes % 60;
     const endTimeStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+    // Validar bloqueo por permiso / ausencia del colaborador
+    const isBlocked = (employeeBlocks || []).some((b) => {
+      if (b.employee_id !== emp.id) return false;
+      const bDate = b.block_date || b.date || b.start_date;
+      const bEndDate = b.end_date || bDate;
+      const inDate = bDate && bEndDate ? newDate >= bDate && newDate <= bEndDate : bDate === newDate;
+      if (!inDate) return false;
+      if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
+      const bStart = b.start_time || '00:00';
+      const bEnd = b.end_time || '23:59';
+      return newStartTime < bEnd && endTimeStr > bStart;
+    });
+
+    if (isBlocked) {
+      alert(`No se puede programar la cita: El colaborador ${emp.full_name} tiene un permiso o ausencia registrada para esta fecha/horario.`);
+      return;
+    }
 
     addBooking({
       client_name: newClientName,
@@ -1067,11 +1086,19 @@ export const ReservasManager: React.FC = () => {
                   onChange={(e) => setNewEmployeeId(e.target.value)}
                   className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none"
                 >
-                  {employees.filter((e) => e.active).map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.full_name} ({emp.type})
-                    </option>
-                  ))}
+                  {employees.filter((e) => e.active).map((emp) => {
+                    const isBlockedOnDate = (employeeBlocks || []).some((b) => {
+                      if (b.employee_id !== emp.id) return false;
+                      const bDate = b.block_date || b.date || b.start_date;
+                      const bEndDate = b.end_date || bDate;
+                      return bDate && bEndDate ? newDate >= bDate && newDate <= bEndDate : bDate === newDate;
+                    });
+                    return (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.full_name} ({emp.type}) {isBlockedOnDate ? '⛔ [EN PERMISO/AUSENCIA]' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

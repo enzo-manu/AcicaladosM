@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 export const PublicBookingFlow: React.FC = () => {
-  const { services, employees, addBooking, openTicketModal, currentUser, currentRole, setActiveView, paymentSettings } = useApp();
+  const { services, employees, employeeBlocks, addBooking, openTicketModal, currentUser, currentRole, setActiveView, paymentSettings } = useApp();
 
   // Step 1 to 5
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -72,18 +72,46 @@ export const PublicBookingFlow: React.FC = () => {
     });
   };
 
-  // Mock available time slots
-  const availableSlots = [
-    { time: '09:00', available: true },
-    { time: '10:00', available: true },
-    { time: '11:00', available: true },
-    { time: '12:30', available: false },
-    { time: '14:00', available: true },
-    { time: '15:30', available: true },
-    { time: '17:00', available: true },
-    { time: '18:30', available: true },
-    { time: '19:45', available: true },
-  ];
+  // Dynamic available time slots based on employee leaves and blocks
+  const availableSlots = useMemo(() => {
+    const baseSlots = [
+      '09:00', '10:00', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30', '19:45'
+    ];
+
+    return baseSlots.map((slotTime) => {
+      const [sh, sm] = slotTime.split(':').map(Number);
+      const endMins = sh * 60 + sm + (totalDurationMinutes || 45);
+      const endH = Math.floor(endMins / 60);
+      const endM = endMins % 60;
+      const slotEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+      // Check if at least one qualified active employee is free on this slot
+      const hasFreeSpecialist = (employees || []).some((emp) => {
+        if (!emp.active) return false;
+        const canDoService = selectedServices.length === 0 || selectedServices.some((s) => emp.skills?.includes(s.id));
+        if (!canDoService) return false;
+
+        const isBlocked = (employeeBlocks || []).some((b) => {
+          if (b.employee_id !== emp.id) return false;
+          const bDate = b.block_date || b.date || b.start_date;
+          const bEndDate = b.end_date || bDate;
+          const inDate = bDate && bEndDate ? bookingDate >= bDate && bookingDate <= bEndDate : bDate === bookingDate;
+          if (!inDate) return false;
+          if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
+          const bStart = b.start_time || '00:00';
+          const bEnd = b.end_time || '23:59';
+          return slotTime < bEnd && slotEndTime > bStart;
+        });
+
+        return !isBlocked;
+      });
+
+      return {
+        time: slotTime,
+        available: hasFreeSpecialist,
+      };
+    });
+  }, [employees, employeeBlocks, bookingDate, selectedServices, totalDurationMinutes]);
 
   const handleFinishBooking = () => {
     if (!clientName.trim() || !clientPhone.trim()) return;
@@ -95,10 +123,25 @@ export const PublicBookingFlow: React.FC = () => {
     const endM = totalMinutes % 60;
     const endTimeStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-    // Map services to available employees
+    // Map services to available employees (excluding those with active leave blocks)
     const mappedServices: BookingServiceItem[] = selectedServices.map((srv) => {
       const specialist =
-        (employees || []).find((e) => e.skills?.includes(srv.id) && e.active) ||
+        (employees || []).find((e) => {
+          if (!e.skills?.includes(srv.id) || !e.active) return false;
+          const isBlocked = (employeeBlocks || []).some((b) => {
+            if (b.employee_id !== e.id) return false;
+            const bDate = b.block_date || b.date || b.start_date;
+            const bEndDate = b.end_date || bDate;
+            const inDate = bDate && bEndDate ? bookingDate >= bDate && bookingDate <= bEndDate : bDate === bookingDate;
+            if (!inDate) return false;
+            if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
+            const bStart = b.start_time || '00:00';
+            const bEnd = b.end_time || '23:59';
+            return selectedSlot < bEnd && endTimeStr > bStart;
+          });
+          return !isBlocked;
+        }) ||
+        (employees || []).find((e) => e.active) ||
         employees?.[0] || {
           id: 'emp-1',
           full_name: 'Especialista de Turno',

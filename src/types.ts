@@ -56,15 +56,18 @@ export interface WardrobeItem {
   description: string;
 }
 
-export type EmployeeType = 'barbero' | 'terapeuta_spa' | 'estilista' | 'recepcionista' | 'barberia' | 'spa' | 'recepcion';
+export type EmployeeType = 'barbero' | 'spa' | 'recepcionista';
 
 export interface Employee {
   id: string;
+  first_name?: string;
+  last_name?: string;
   full_name: string;
   role?: 'admin' | 'recepcionista' | 'empleado';
   type: string;
   skills: string[]; // Service IDs
   active: boolean;
+  handles_reception?: boolean;
   avatar_url?: string;
   avatar?: string;
   qr_code_uuid?: string;
@@ -104,11 +107,19 @@ export interface EmployeeAttendance {
 export interface EmployeeBlock {
   id: string;
   employee_id: string;
-  employee_name: string;
-  start_date: string;
-  end_date: string;
+  employee_name?: string;
+  block_date?: string;
+  date?: string;
+  start_date?: string;
+  end_date?: string;
+  start_time?: string;
+  end_time?: string;
   reason: string;
-  status: 'aprobado' | 'pendiente';
+  leave_type?: string;
+  document_url?: string;
+  is_full_day?: boolean;
+  status?: 'aprobado' | 'pendiente' | string;
+  created_at?: string;
 }
 
 export interface BookingServiceItem {

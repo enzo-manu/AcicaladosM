@@ -5,6 +5,7 @@ import {
   Product,
   WardrobeItem,
   Employee,
+  EmployeeBlock,
   Booking,
   PaymentLog,
   VentaMostrador,
@@ -52,6 +53,8 @@ interface AppContextType {
   wardrobe: WardrobeItem[];
   employees: Employee[];
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
+  employeeBlocks: EmployeeBlock[];
+  setEmployeeBlocks: React.Dispatch<React.SetStateAction<EmployeeBlock[]>>;
   bookings: Booking[];
   paymentLogs: PaymentLog[];
   ventasMostrador: VentaMostrador[];
@@ -107,9 +110,22 @@ interface AppContextType {
   voidExpense: (expenseId: string, reason: string) => void;
 
   // Employees & Attendance
-  addEmployee: (emp: Omit<Employee, 'id' | 'qr_code_uuid'>) => void;
-  updateEmployee: (emp: Employee) => void;
+  addEmployee: (emp: Omit<Employee, 'id' | 'qr_code_uuid'> & { skills?: string[] }) => Promise<Employee | null>;
+  updateEmployee: (emp: Employee) => Promise<boolean>;
+  deleteEmployee: (empId: string) => Promise<boolean>;
   toggleEmployeeActive: (empId: string) => void;
+  addEmployeeLeave: (leave: {
+    employee_id: string;
+    leave_type: string;
+    reason: string;
+    start_date: string;
+    end_date?: string;
+    start_time?: string;
+    end_time?: string;
+    is_full_day: boolean;
+    document_url?: string;
+  }) => Promise<boolean>;
+  deleteEmployeeBlock: (blockId: string) => Promise<boolean>;
   scanAttendanceQR: (qrCode: string) => { success: boolean; message: string; employee?: Employee; type?: 'check_in' | 'check_out' };
   registerAttendancePunch: (employeeId: string, punchType: 'check_in' | 'check_out') => void;
   manualAdjustBonus: (attendanceId: string, newBonusMinutes: number, reason: string) => void;
@@ -209,6 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>(INITIAL_WARDROBE);
   const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const [employeeBlocks, setEmployeeBlocks] = useState<EmployeeBlock[]>([]);
   const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS);
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>(INITIAL_PAYMENT_LOGS);
   const [ventasMostrador, setVentasMostrador] = useState<VentaMostrador[]>(INITIAL_VENTAS_MOSTRADOR);
@@ -290,19 +307,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const empMap = new Map<string, string>();
       if (dbEmployees && dbEmployees.length > 0) {
         dbEmployees.forEach((e: any) => {
-          empMap.set(e.id, `${e.first_name} ${e.last_name}`.trim());
+          empMap.set(e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.first_name || 'Colaborador');
         });
         setEmployees(
           dbEmployees.map((e: any) => ({
             id: e.id,
-            full_name: `${e.first_name} ${e.last_name}`.trim(),
+            first_name: e.first_name || '',
+            last_name: e.last_name || '',
+            full_name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.first_name || 'Colaborador',
             type: e.type,
             skills: e.employee_skills ? e.employee_skills.map((sk: any) => sk.service_id) : [],
             active: e.is_active,
-            avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-            phone: '+51 987 654 321',
+            avatar: e.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+            avatar_url: e.avatar_url,
+            phone: e.phone || '+51 987 654 321',
+            email: e.email || '',
+            dni: e.dni || '',
+            handles_reception: e.handles_reception || false,
+            shift_start: e.shift_start || '09:00',
+            shift_end: e.shift_end || '18:00',
+            commission_percentage: e.commission_percentage || 40,
             qr_code_uuid: e.id,
             rotation_order: e.rotation_order,
+          }))
+        );
+      }
+
+      // 4.1 Bloqueos y permisos de colaboradores
+      const { data: dbBlocks } = await supabase
+        .from('employee_blocks')
+        .select('*')
+        .order('block_date', { ascending: false });
+      if (dbBlocks) {
+        setEmployeeBlocks(
+          dbBlocks.map((b: any) => ({
+            id: b.id,
+            employee_id: b.employee_id,
+            employee_name: empMap.get(b.employee_id) || 'Colaborador',
+            date: b.block_date,
+            block_date: b.block_date,
+            start_date: b.block_date,
+            end_date: b.end_date || b.block_date,
+            start_time: b.start_time?.substring(0, 5) || '00:00',
+            end_time: b.end_time?.substring(0, 5) || '23:59',
+            reason: b.reason || '',
+            leave_type: b.leave_type || 'Otro Motivo',
+            document_url: b.document_url || '',
+            is_full_day: b.is_full_day ?? true,
+            status: b.status || 'aprobado',
+            created_at: b.created_at,
           }))
         );
       }
@@ -455,6 +508,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             payload.table === 'booking_services' ||
             payload.table === 'payment_logs' ||
             payload.table === 'employee_blocks' ||
+            payload.table === 'employees' ||
+            payload.table === 'employee_skills' ||
             payload.table === 'services' ||
             payload.table === 'products' ||
             payload.table === 'ventas_mostrador' ||
@@ -1074,41 +1129,255 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [currentUser.name, pulseRealtime]);
 
   // EMPLOYEE & ATTENDANCE HANDLERS
-  const addEmployee = useCallback((empData: Omit<Employee, 'id' | 'qr_code_uuid'>) => {
-    const newId = `emp-${Date.now()}`;
-    const newEmp: Employee = {
-      ...empData,
-      id: newId,
-      qr_code_uuid: `qr-${newId}-${Math.floor(1000 + Math.random() * 9000)}`,
-    };
-    setEmployees((prev) => [...prev, newEmp]);
-    pulseRealtime();
+  const addEmployee = useCallback(async (empData: Omit<Employee, 'id' | 'qr_code_uuid'> & { skills?: string[] }): Promise<Employee | null> => {
+    try {
+      const firstName = empData.first_name || empData.full_name.trim().split(' ')[0] || 'Colaborador';
+      const lastName = empData.last_name || empData.full_name.trim().split(' ').slice(1).join(' ') || '';
 
-    const names = empData.full_name.trim().split(' ');
-    const firstName = names[0] || 'Colaborador';
-    const lastName = names.slice(1).join(' ') || '';
+      const insertPayload = {
+        first_name: firstName,
+        last_name: lastName,
+        type: empData.type,
+        dni: empData.dni || null,
+        phone: empData.phone || null,
+        email: empData.email || null,
+        handles_reception: empData.handles_reception || false,
+        shift_start: empData.shift_start || '09:00',
+        shift_end: empData.shift_end || '18:00',
+        commission_percentage: empData.commission_percentage ?? 40,
+        is_active: empData.active ?? true,
+        rotation_order: empData.rotation_order || 0,
+      };
 
-    supabase.from('employees').insert({
-      first_name: firstName,
-      last_name: lastName,
-      type: empData.type,
-      is_active: empData.active,
-      rotation_order: empData.rotation_order || 0,
-    }).then();
+      const { data, error } = await supabase.from('employees').insert(insertPayload).select().single();
+
+      if (error || !data) {
+        console.error('Error inserting employee in Supabase:', error);
+        const newId = `emp-${Date.now()}`;
+        const fallbackEmp: Employee = {
+          ...empData,
+          id: newId,
+          first_name: firstName,
+          last_name: lastName,
+          full_name: `${firstName} ${lastName}`.trim(),
+          qr_code_uuid: `qr-${newId}`,
+        };
+        setEmployees((prev) => [...prev, fallbackEmp]);
+        pulseRealtime();
+        return fallbackEmp;
+      }
+
+      if (empData.skills && empData.skills.length > 0) {
+        const skillRows = empData.skills.map((serviceId) => ({
+          employee_id: data.id,
+          service_id: serviceId,
+        }));
+        await supabase.from('employee_skills').insert(skillRows);
+      }
+
+      const newEmp: Employee = {
+        id: data.id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        full_name: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
+        type: data.type,
+        skills: empData.skills || [],
+        active: data.is_active,
+        avatar: data.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+        avatar_url: data.avatar_url,
+        phone: data.phone || '',
+        email: data.email || '',
+        dni: data.dni || '',
+        handles_reception: data.handles_reception || false,
+        shift_start: data.shift_start || '09:00',
+        shift_end: data.shift_end || '18:00',
+        commission_percentage: data.commission_percentage || 40,
+        qr_code_uuid: data.id,
+        rotation_order: data.rotation_order,
+      };
+
+      setEmployees((prev) => [...prev, newEmp]);
+      pulseRealtime();
+      return newEmp;
+    } catch (err) {
+      console.error('Error adding employee:', err);
+      return null;
+    }
   }, [pulseRealtime]);
 
-  const updateEmployee = useCallback((updated: Employee) => {
-    setEmployees((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-    pulseRealtime();
+  const updateEmployee = useCallback(async (updated: Employee): Promise<boolean> => {
+    try {
+      const firstName = updated.first_name || updated.full_name.trim().split(' ')[0] || 'Colaborador';
+      const lastName = updated.last_name || updated.full_name.trim().split(' ').slice(1).join(' ') || '';
 
-    if (updated.id.includes('-') && updated.id.length === 36) {
-      const names = updated.full_name.trim().split(' ');
-      supabase.from('employees').update({
-        first_name: names[0] || 'Colaborador',
-        last_name: names.slice(1).join(' ') || '',
-        type: updated.type,
-        is_active: updated.active,
-      }).eq('id', updated.id).then();
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === updated.id
+            ? {
+                ...updated,
+                first_name: firstName,
+                last_name: lastName,
+                full_name: `${firstName} ${lastName}`.trim(),
+              }
+            : e
+        )
+      );
+      pulseRealtime();
+
+      if (updated.id.includes('-') && updated.id.length === 36) {
+        const { error } = await supabase
+          .from('employees')
+          .update({
+            first_name: firstName,
+            last_name: lastName,
+            type: updated.type,
+            dni: updated.dni || null,
+            phone: updated.phone || null,
+            email: updated.email || null,
+            handles_reception: updated.handles_reception || false,
+            shift_start: updated.shift_start || '09:00',
+            shift_end: updated.shift_end || '18:00',
+            commission_percentage: updated.commission_percentage ?? 40,
+            is_active: updated.active,
+          })
+          .eq('id', updated.id);
+
+        if (error) {
+          console.error('Error updating employee in Supabase:', error);
+          return false;
+        }
+
+        // Sincronizar habilidades
+        await supabase.from('employee_skills').delete().eq('employee_id', updated.id);
+        if (updated.skills && updated.skills.length > 0) {
+          const skillRows = updated.skills.map((serviceId) => ({
+            employee_id: updated.id,
+            service_id: serviceId,
+          }));
+          await supabase.from('employee_skills').insert(skillRows);
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating employee:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const deleteEmployee = useCallback(async (empId: string): Promise<boolean> => {
+    try {
+      if (empId.includes('-') && empId.length === 36) {
+        await supabase.from('employee_skills').delete().eq('employee_id', empId);
+        await supabase.from('employee_blocks').delete().eq('employee_id', empId);
+        const { error } = await supabase.from('employees').delete().eq('id', empId);
+        if (error) {
+          console.error('Error deleting employee from Supabase:', error);
+          return false;
+        }
+      }
+      setEmployees((prev) => prev.filter((e) => e.id !== empId));
+      pulseRealtime();
+      return true;
+    } catch (err) {
+      console.error('Error in deleteEmployee:', err);
+      return false;
+    }
+  }, [pulseRealtime]);
+
+  const addEmployeeLeave = useCallback(async (leaveData: {
+    employee_id: string;
+    leave_type: string;
+    reason: string;
+    start_date: string;
+    end_date?: string;
+    start_time?: string;
+    end_time?: string;
+    is_full_day: boolean;
+    document_url?: string;
+  }): Promise<boolean> => {
+    try {
+      const startDate = leaveData.start_date;
+      const endDate = leaveData.end_date || leaveData.start_date;
+      const isFullDay = leaveData.is_full_day;
+      const startTime = isFullDay ? '00:00:00' : (leaveData.start_time || '09:00:00') + (leaveData.start_time?.length === 5 ? ':00' : '');
+      const endTime = isFullDay ? '23:59:59' : (leaveData.end_time || '18:00:00') + (leaveData.end_time?.length === 5 ? ':00' : '');
+
+      const datesToInsert: string[] = [];
+      let cur = new Date(`${startDate}T12:00:00Z`);
+      const end = new Date(`${endDate}T12:00:00Z`);
+
+      while (cur <= end) {
+        datesToInsert.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      if (datesToInsert.length === 0) {
+        datesToInsert.push(startDate);
+      }
+
+      const rows = datesToInsert.map((dateStr) => ({
+        employee_id: leaveData.employee_id,
+        block_date: dateStr,
+        end_date: endDate,
+        start_time: startTime,
+        end_time: endTime,
+        reason: leaveData.reason,
+        leave_type: leaveData.leave_type,
+        document_url: leaveData.document_url || null,
+        is_full_day: isFullDay,
+        status: 'aprobado',
+      }));
+
+      const { data, error } = await supabase.from('employee_blocks').insert(rows).select();
+      if (error) {
+        console.error('Error inserting employee_blocks:', error);
+        return false;
+      }
+
+      const emp = employees.find((e) => e.id === leaveData.employee_id);
+      const empName = emp ? emp.full_name : 'Colaborador';
+
+      if (data && data.length > 0) {
+        const newBlocks: EmployeeBlock[] = data.map((b: any) => ({
+          id: b.id,
+          employee_id: b.employee_id,
+          employee_name: empName,
+          date: b.block_date,
+          block_date: b.block_date,
+          start_date: b.block_date,
+          end_date: b.end_date || b.block_date,
+          start_time: b.start_time?.substring(0, 5) || '00:00',
+          end_time: b.end_time?.substring(0, 5) || '23:59',
+          reason: b.reason,
+          leave_type: b.leave_type,
+          document_url: b.document_url,
+          is_full_day: b.is_full_day,
+          status: b.status,
+          created_at: b.created_at,
+        }));
+        setEmployeeBlocks((prev) => [...newBlocks, ...prev]);
+      }
+      pulseRealtime();
+      return true;
+    } catch (err) {
+      console.error('Error in addEmployeeLeave:', err);
+      return false;
+    }
+  }, [employees, pulseRealtime]);
+
+  const deleteEmployeeBlock = useCallback(async (blockId: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.from('employee_blocks').delete().eq('id', blockId);
+      if (error) {
+        console.error('Error deleting employee_block:', error);
+        return false;
+      }
+      setEmployeeBlocks((prev) => prev.filter((b) => b.id !== blockId));
+      pulseRealtime();
+      return true;
+    } catch (err) {
+      console.error('Error in deleteEmployeeBlock:', err);
+      return false;
     }
   }, [pulseRealtime]);
 
@@ -1747,6 +2016,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         wardrobe,
         employees,
         setEmployees,
+        employeeBlocks,
+        setEmployeeBlocks,
         bookings,
         paymentLogs,
         ventasMostrador,
@@ -1783,7 +2054,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         voidExpense,
         addEmployee,
         updateEmployee,
+        deleteEmployee,
         toggleEmployeeActive,
+        addEmployeeLeave,
+        deleteEmployeeBlock,
         scanAttendanceQR,
         registerAttendancePunch,
         manualAdjustBonus,
