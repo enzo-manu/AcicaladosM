@@ -153,13 +153,13 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
 
   return (
     <div className={`relative group/carousel ${className}`}>
-      {/* Botón Lateral Izquierdo */}
+      {/* Botón Lateral Izquierdo (Oculto en móvil, visible en escritorio md+) */}
       <button
         type="button"
         onClick={() => handleScrollBy(-1)}
         disabled={!canScrollLeft}
         aria-label="Desplazar a la izquierda"
-        className={`flex absolute -left-2 sm:-left-5 top-1/2 -translate-y-1/2 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#141414]/95 border border-[#C8A45C]/40 text-[#E6C875] items-center justify-center shadow-2xl backdrop-blur-md transition-all duration-300 ${
+        className={`hidden md:flex absolute -left-4 lg:-left-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 lg:w-12 lg:h-12 rounded-2xl bg-[#141414]/95 border border-[#C8A45C]/40 text-[#E6C875] items-center justify-center shadow-2xl backdrop-blur-md transition-all duration-300 ${
           canScrollLeft
             ? 'opacity-100 hover:bg-[#202020] hover:border-[#C8A45C] hover:text-white hover:scale-110 active:scale-95 cursor-pointer shadow-[#C8A45C]/20'
             : 'opacity-0 pointer-events-none'
@@ -168,13 +168,13 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
         <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
       </button>
 
-      {/* Botón Lateral Derecho */}
+      {/* Botón Lateral Derecho (Oculto en móvil, visible en escritorio md+) */}
       <button
         type="button"
         onClick={() => handleScrollBy(1)}
         disabled={!canScrollRight}
         aria-label="Desplazar a la derecha"
-        className={`flex absolute -right-2 sm:-right-5 top-1/2 -translate-y-1/2 z-30 w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#141414]/95 border border-[#C8A45C]/40 text-[#E6C875] items-center justify-center shadow-2xl backdrop-blur-md transition-all duration-300 ${
+        className={`hidden md:flex absolute -right-4 lg:-right-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 lg:w-12 lg:h-12 rounded-2xl bg-[#141414]/95 border border-[#C8A45C]/40 text-[#E6C875] items-center justify-center shadow-2xl backdrop-blur-md transition-all duration-300 ${
           canScrollRight
             ? 'opacity-100 hover:bg-[#202020] hover:border-[#C8A45C] hover:text-white hover:scale-110 active:scale-95 cursor-pointer shadow-[#C8A45C]/20'
             : 'opacity-0 pointer-events-none'
@@ -183,21 +183,21 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
         <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
       </button>
 
-      {/* Contenedor con Scroll Libre Horizontal */}
+      {/* Contenedor con Scroll Libre Horizontal y Swipe Táctil Nativo */}
       <div
         ref={containerRef}
         onMouseDown={handleMouseDown}
         onScroll={updateScrollState}
         onDragStart={(e) => e.preventDefault()}
         style={{
-          touchAction: 'pan-y',
+          touchAction: 'pan-x pan-y',
           WebkitOverflowScrolling: 'touch',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
         }}
-        className={`overflow-x-auto overscroll-x-contain py-2 px-1 scroll-smooth select-none ${
+        className={`overflow-x-auto touch-pan-x scroll-smooth overscroll-x-contain py-2 px-1 select-none scrollbar-none [&::-webkit-scrollbar]:hidden ${
           isCursorGrabbing ? 'cursor-grabbing select-none' : 'cursor-grab'
-        } [&::-webkit-scrollbar]:hidden`}
+        }`}
       >
         <div className={gridClassName}>
           {children}
@@ -208,7 +208,8 @@ export const CatalogCarousel: React.FC<CatalogCarouselProps> = ({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-4 px-2 text-[11px] text-neutral-400">
         <div className="flex items-center gap-1.5 text-neutral-400">
           <MoveHorizontal className="w-3.5 h-3.5 text-[#C8A45C] animate-pulse" />
-          <span>Gira la rueda, arrastra con el cursor o desliza para navegar</span>
+          <span className="hidden sm:inline">Gira la rueda, arrastra con el cursor o desliza para navegar</span>
+          <span className="sm:hidden">Desliza horizontalmente para explorar todo el catálogo</span>
         </div>
 
         {/* Barra de progreso dorada */}

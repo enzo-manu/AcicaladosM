@@ -80,6 +80,15 @@
   background: #C8A45C;
 }
 
+/* Utilidad para ocultar barras de scroll nativas de forma limpia */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 @keyframes slideInRight {
   from {
     transform: translateX(100%);
