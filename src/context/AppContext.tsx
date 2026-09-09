@@ -342,6 +342,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             shift_end: e.shift_end || '18:00',
             commission_percentage: e.commission_percentage || 40,
             qr_code_uuid: e.id,
+            qr_code: e.qr_code || `ACICALADOS-EMP-${e.id}-${e.dni || 'PASS'}`,
             rotation_order: e.rotation_order,
           }))
         );
@@ -1508,16 +1509,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       punctuality?: 'puntual' | 'tardanza' | 'horas_extra';
       minutes?: number;
     } => {
-      const cleanQr = (qrCode || '').trim();
+      const cleanQr = (qrCode || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
       let emp = employees.find(
-        (e) => e.qr_code_uuid === cleanQr || e.id === cleanQr || e.dni === cleanQr
+        (e) =>
+          (e.qr_code && e.qr_code === cleanQr) ||
+          e.qr_code_uuid === cleanQr ||
+          e.id === cleanQr ||
+          (e.dni && e.dni === cleanQr)
       );
+
       if (!emp && cleanQr.startsWith('ACICALADOS-EMP-')) {
-        const parts = cleanQr.replace('ACICALADOS-EMP-', '').split('-');
-        const candidateId = parts[0];
-        const candidateDni = parts[1];
+        const rawPayload = cleanQr.replace('ACICALADOS-EMP-', '');
         emp = employees.find(
-          (e) => e.id === candidateId || (candidateDni && e.dni === candidateDni)
+          (e) =>
+            rawPayload.includes(e.id) ||
+            (e.qr_code && cleanQr === e.qr_code) ||
+            (e.dni && rawPayload.endsWith(e.dni))
+        );
+      }
+
+      if (!emp) {
+        emp = employees.find(
+          (e) =>
+            (e.qr_code && cleanQr.includes(e.qr_code)) ||
+            (e.id && cleanQr.includes(e.id)) ||
+            (e.dni && cleanQr.includes(e.dni))
         );
       }
 
@@ -1535,6 +1551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         minute: '2-digit',
         hour12: false,
       });
+      const isoNow = new Date().toISOString();
       const [nowH, nowM] = nowLima.split(':').map(Number);
       const nowMinutes = nowH * 60 + nowM;
 
@@ -1594,7 +1611,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: generatedId.length === 36 ? generatedId : undefined,
             employee_id: emp.id,
             date: today,
-            check_in: nowLima,
+            check_in: isoNow,
             status,
             tardy_minutes: tardyMinutes,
             overtime_minutes: 0,
@@ -1643,7 +1660,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase
           .from('employee_attendances')
           .update({
-            check_out: nowLima,
+            check_out: isoNow,
             overtime_minutes: overtimeMinutes,
             bonus_minutes: overtimeMinutes,
             bonus_calculation_type: 'auto',

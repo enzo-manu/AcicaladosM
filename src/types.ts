@@ -71,6 +71,7 @@ export interface Employee {
   avatar_url?: string;
   avatar?: string;
   qr_code_uuid?: string;
+  qr_code?: string;
   phone: string;
   dni?: string;
   email?: string;
