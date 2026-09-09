@@ -131,6 +131,10 @@ export interface BookingServiceItem {
   employee_name: string;
   price_cents: number;
   duration_minutes: number;
+  hora_inicio?: string; // HH:mm
+  hora_fin?: string; // HH:mm
+  start_time?: string; // HH:mm
+  end_time?: string; // HH:mm
   liberado_at?: string; // If service finished early
 }
 

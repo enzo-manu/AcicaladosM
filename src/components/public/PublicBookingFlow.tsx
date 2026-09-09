@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Service, formatSoles, BusinessCategory, BookingServiceItem } from '../../types';
 import { PaymentQRWidget } from '../common/PaymentQRWidget';
@@ -32,9 +32,26 @@ import {
   PHONE_ERROR_MESSAGE,
   DNI_ERROR_MESSAGE,
 } from '../../lib/validators';
+import { getTodayDateString } from '../../data/initialData';
+import {
+  computeSlotsAvailability,
+  getLimaDateTime,
+  ComputedSlot,
+} from '../../lib/bookingAvailability';
 
 export const PublicBookingFlow: React.FC = () => {
-  const { services, employees, employeeBlocks, addBooking, openTicketModal, currentUser, currentRole, setActiveView, paymentSettings } = useApp();
+  const {
+    services,
+    employees,
+    employeeBlocks,
+    bookings,
+    addBooking,
+    openTicketModal,
+    currentUser,
+    currentRole,
+    setActiveView,
+    paymentSettings,
+  } = useApp();
 
   // Step 1 to 5
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -42,12 +59,17 @@ export const PublicBookingFlow: React.FC = () => {
   // Form State
   const [selectedType, setSelectedType] = useState<BusinessCategory>('barberia');
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
-  const [bookingDate, setBookingDate] = useState<string>(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
-  });
-  const [selectedSlot, setSelectedSlot] = useState<string>('11:00');
+  const [bookingDate, setBookingDate] = useState<string>(() => getTodayDateString());
+  const [selectedSlot, setSelectedSlot] = useState<string>('');
+
+  // Real-time ticker for America/Lima (UTC-5)
+  const [limaClock, setLimaClock] = useState(() => getLimaDateTime());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLimaClock(getLimaDateTime());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Client Details
   const [clientName, setClientName] = useState<string>(currentUser.role === 'cliente' ? currentUser.name : '');
@@ -71,7 +93,7 @@ export const PublicBookingFlow: React.FC = () => {
 
   // Totals
   const totalPriceCents = selectedServices.reduce((acc, s) => acc + s.price_cents, 0);
-  const totalDurationMinutes = selectedServices.reduce((acc, s) => acc + s.duration_minutes, 0);
+  const totalDurationMinutes = selectedServices.reduce((acc, s) => acc + (s.duration_minutes || 30), 0);
   const minAdvanceCents = Math.round((totalPriceCents * paymentSettings.advance_percentage) / 100);
 
   const toggleServiceSelection = (srv: Service) => {
@@ -85,46 +107,39 @@ export const PublicBookingFlow: React.FC = () => {
     });
   };
 
-  // Dynamic available time slots based on employee leaves and blocks
-  const availableSlots = useMemo(() => {
-    const baseSlots = [
-      '09:00', '10:00', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30', '19:45'
-    ];
-
-    return baseSlots.map((slotTime) => {
-      const [sh, sm] = slotTime.split(':').map(Number);
-      const endMins = sh * 60 + sm + (totalDurationMinutes || 45);
-      const endH = Math.floor(endMins / 60);
-      const endM = endMins % 60;
-      const slotEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-
-      // Check if at least one qualified active employee is free on this slot
-      const hasFreeSpecialist = (employees || []).some((emp) => {
-        if (!emp.active) return false;
-        const canDoService = selectedServices.length === 0 || selectedServices.some((s) => emp.skills?.includes(s.id));
-        if (!canDoService) return false;
-
-        const isBlocked = (employeeBlocks || []).some((b) => {
-          if (b.employee_id !== emp.id) return false;
-          const bDate = b.block_date || b.date || b.start_date;
-          const bEndDate = b.end_date || bDate;
-          const inDate = bDate && bEndDate ? bookingDate >= bDate && bookingDate <= bEndDate : bDate === bookingDate;
-          if (!inDate) return false;
-          if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
-          const bStart = b.start_time || '00:00';
-          const bEnd = b.end_time || '23:59';
-          return slotTime < bEnd && slotEndTime > bStart;
-        });
-
-        return !isBlocked;
-      });
-
-      return {
-        time: slotTime,
-        available: hasFreeSpecialist,
-      };
+  // Cálculo estricto de disponibilidad en bloques de 30 minutos y concurrencia por especialista
+  const computedSlots: ComputedSlot[] = useMemo(() => {
+    return computeSlotsAvailability({
+      bookingDate,
+      selectedServices,
+      employees,
+      employeeBlocks,
+      bookings,
+      currentLimaDateTime: limaClock,
     });
-  }, [employees, employeeBlocks, bookingDate, selectedServices, totalDurationMinutes]);
+  }, [bookingDate, selectedServices, employees, employeeBlocks, bookings, limaClock]);
+
+  // Slot seleccionado actualmente
+  const selectedSlotObj = useMemo(() => {
+    return computedSlots.find((s) => s.time === selectedSlot);
+  }, [computedSlots, selectedSlot]);
+
+  // Cantidad de slots libres disponibles para la fecha
+  const availableSlotsCount = useMemo(() => {
+    return computedSlots.filter((s) => s.status === 'disponible').length;
+  }, [computedSlots]);
+
+  // Auto-selección inteligente del primer horario disponible
+  useEffect(() => {
+    if (!selectedSlot || !selectedSlotObj || selectedSlotObj.status !== 'disponible') {
+      const firstAvailable = computedSlots.find((s) => s.status === 'disponible');
+      if (firstAvailable) {
+        setSelectedSlot(firstAvailable.time);
+      } else {
+        setSelectedSlot('');
+      }
+    }
+  }, [computedSlots, selectedSlot, selectedSlotObj]);
 
   const handleFinishBooking = () => {
     setBookingFormError(null);
@@ -143,50 +158,37 @@ export const PublicBookingFlow: React.FC = () => {
       return;
     }
 
-    // Calculate end time
-    const [startH, startM] = selectedSlot.split(':').map(Number);
-    const totalMinutes = startH * 60 + startM + (totalDurationMinutes || 45);
-    const endH = Math.floor(totalMinutes / 60);
-    const endM = totalMinutes % 60;
-    const endTimeStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    if (!selectedSlot || !selectedSlotObj || selectedSlotObj.status !== 'disponible') {
+      alert('Por favor selecciona un horario disponible.');
+      return;
+    }
 
-    // Map services to available employees (excluding those with active leave blocks)
-    const mappedServices: BookingServiceItem[] = selectedServices.map((srv) => {
-      const specialist =
-        (employees || []).find((e) => {
-          if (!e.skills?.includes(srv.id) || !e.active) return false;
-          const isBlocked = (employeeBlocks || []).some((b) => {
-            if (b.employee_id !== e.id) return false;
-            const bDate = b.block_date || b.date || b.start_date;
-            const bEndDate = b.end_date || bDate;
-            const inDate = bDate && bEndDate ? bookingDate >= bDate && bookingDate <= bEndDate : bDate === bookingDate;
-            if (!inDate) return false;
-            if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
-            const bStart = b.start_time || '00:00';
-            const bEnd = b.end_time || '23:59';
-            return selectedSlot < bEnd && endTimeStr > bStart;
-          });
-          return !isBlocked;
-        }) ||
-        (employees || []).find((e) => e.active) ||
-        employees?.[0] || {
-          id: 'emp-1',
-          full_name: 'Especialista de Turno',
-          role: 'empleado',
-          type: 'barberia',
-          skills: [],
-          active: true,
-          phone: '+51 987 654 321',
-        };
+    const overallEnd = selectedSlotObj.overallEndTime;
+    const plans = selectedSlotObj.servicePlans || [];
+
+    // Mapear cada servicio con su especialista asignado y sus horas exactas de inicio y fin
+    const mappedServices: BookingServiceItem[] = selectedServices.map((srv, idx) => {
+      const planItem = plans.find((p) => p.serviceId === srv.id) || plans[idx];
+      const specialistId = planItem?.employeeId || employees[0]?.id || 'emp-1';
+      const specialistName = planItem?.employeeName || employees[0]?.full_name || 'Especialista';
+      const srvStart = planItem?.startTime || selectedSlot;
+      const srvEnd = planItem?.endTime || overallEnd;
+
       return {
         service_id: srv.id,
         service_name: srv.name,
-        employee_id: specialist.id,
-        employee_name: specialist.full_name,
+        employee_id: specialistId,
+        employee_name: specialistName,
         price_cents: srv.price_cents,
-        duration_minutes: srv.duration_minutes,
+        duration_minutes: srv.duration_minutes || 30,
+        hora_inicio: srvStart,
+        hora_fin: srvEnd,
+        start_time: srvStart,
+        end_time: srvEnd,
       };
     });
+
+    const primaryEmployeeId = mappedServices[0]?.employee_id;
 
     const newBooking = addBooking({
       client_name: clientName,
@@ -195,7 +197,7 @@ export const PublicBookingFlow: React.FC = () => {
       client_dni: clientDni,
       date: bookingDate,
       start_time: selectedSlot,
-      end_time: endTimeStr,
+      end_time: overallEnd,
       type: selectedType,
       services: mappedServices,
       total_price_cents: totalPriceCents,
@@ -479,66 +481,212 @@ export const PublicBookingFlow: React.FC = () => {
 
       {/* STEP 3: Date & Time Picker */}
       {currentStep === 3 && (
-        <div className="bg-[#141414] border border-[#C8A45C]/25 rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl">
-          <div className="space-y-1 border-b border-neutral-800 pb-4">
-            <h3 className="font-serif-luxury text-lg font-bold text-white">
-              Paso 3: Fecha y Horario de Atención
-            </h3>
+        <div className="bg-[#141414] border border-[#C8A45C]/25 rounded-2xl p-5 sm:p-8 space-y-6 shadow-xl">
+          <div className="space-y-1.5 border-b border-neutral-800 pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-serif-luxury text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-[#C8A45C]" />
+                <span>Paso 3: Fecha y Horario de Atención</span>
+              </h3>
+              <span className="text-[11px] px-3 py-1 rounded-full bg-[#C8A45C]/10 border border-[#C8A45C]/30 text-[#C8A45C] font-semibold flex items-center gap-1.5 shadow-sm">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Hora Oficial: {limaClock.timeStr} (UTC-5 Lima)</span>
+              </span>
+            </div>
             <p className="text-xs text-neutral-400">
-              Zona Horaria Oficial: America/Lima (UTC-5). Los turnos no disponibles ya han alcanzado el aforo máximo.
+              Selecciona tu día y un bloque de 30 minutos de 09:00 a 21:00 hrs. Los cupos y aforo se calculan en tiempo real según la disponibilidad de nuestros especialistas.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 items-start">
-            {/* Date Input */}
-            <div className="sm:col-span-5 space-y-2">
-              <label className="text-xs font-semibold text-neutral-300 block">
-                Selecciona el Día:
-              </label>
+          {/* Date Picker Bar */}
+          <div className="bg-[#181818] border border-neutral-800/90 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-lg bg-[#C8A45C]/10 border border-[#C8A45C]/30 text-[#C8A45C] shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-white block">
+                  Fecha de la Cita:
+                </label>
+                <span className="text-[11px] text-neutral-400">
+                  {bookingDate === limaClock.dateStr
+                    ? 'Atención hoy (bloques anteriores bloqueados automáticamente)'
+                    : 'Fecha programada con disponibilidad completa'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={bookingDate}
-                min={new Date().toISOString().split('T')[0]}
+                min={limaClock.dateStr}
                 onChange={(e) => setBookingDate(e.target.value)}
-                className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C] text-white text-xs rounded-xl px-4 py-3 outline-none transition"
+                className="bg-[#121212] border border-neutral-700 focus:border-[#C8A45C] text-white text-xs sm:text-sm rounded-xl px-4 py-2.5 outline-none transition font-medium cursor-pointer"
               />
-              <p className="text-[11px] text-neutral-500">
-                Atención continuada de 08:30 a 21:00 hrs.
-              </p>
+            </div>
+          </div>
+
+          {/* Time Slots Grid (Bloques de 30 Minutos) */}
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-300 block">
+                Cuadrícula de Horarios para el {bookingDate}:
+              </label>
+              <span className="text-[11px] font-medium text-neutral-400">
+                <strong className="text-[#C8A45C]">{availableSlotsCount}</strong> de 24 bloques disponibles
+              </span>
             </div>
 
-            {/* Time Slots */}
-            <div className="sm:col-span-7 space-y-2">
-              <label className="text-xs font-semibold text-neutral-300 block">
-                Horarios Disponibles para {bookingDate}:
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {availableSlots.map((slot) => (
+            {/* Cuadrícula de 24 bloques de 30 minutos (09:00 a 20:30) */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 gap-2 sm:gap-2.5">
+              {computedSlots.map((slot) => {
+                const isSelected = selectedSlot === slot.time;
+                return (
                   <button
                     key={slot.time}
                     type="button"
-                    disabled={!slot.available}
+                    disabled={!slot.isSelectable}
                     onClick={() => setSelectedSlot(slot.time)}
-                    className={`py-2.5 px-2 rounded-xl text-xs font-semibold transition text-center ${
-                      selectedSlot === slot.time
-                        ? 'bg-[#C8A45C] text-black shadow font-bold'
-                        : slot.available
-                        ? 'bg-[#181818] text-neutral-300 hover:bg-[#222222] border border-neutral-800'
-                        : 'bg-neutral-900/60 text-neutral-600 border border-neutral-800/40 cursor-not-allowed line-through'
+                    title={slot.reason || `Turno ${slot.time} - ${slot.statusLabel}`}
+                    className={`relative flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl transition-all duration-200 text-center ${
+                      isSelected
+                        ? 'bg-[#C8A45C] text-black font-bold shadow-lg shadow-[#C8A45C]/25 ring-2 ring-[#C8A45C] scale-[1.02] z-10'
+                        : slot.status === 'disponible'
+                        ? 'bg-[#181818] hover:bg-[#222222] text-white border border-[#C8A45C]/40 hover:border-[#C8A45C] hover:shadow-md hover:shadow-[#C8A45C]/15 cursor-pointer'
+                        : slot.status === 'lleno'
+                        ? 'bg-red-950/20 text-red-400/80 border border-red-900/35 cursor-not-allowed opacity-65'
+                        : 'bg-neutral-900/40 text-neutral-600 border border-neutral-800/40 cursor-not-allowed opacity-35'
                     }`}
                   >
-                    {slot.time}
+                    <span
+                      className={`text-sm sm:text-base font-bold tracking-tight ${
+                        isSelected
+                          ? 'text-black'
+                          : slot.status === 'disponible'
+                          ? 'text-white'
+                          : slot.status === 'lleno'
+                          ? 'text-red-300'
+                          : 'text-neutral-600 line-through'
+                      }`}
+                    >
+                      {slot.time}
+                    </span>
+                    <span
+                      className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-wider mt-0.5 ${
+                        isSelected
+                          ? 'text-neutral-950 font-black'
+                          : slot.status === 'disponible'
+                          ? 'text-[#C8A45C]'
+                          : slot.status === 'lleno'
+                          ? 'text-red-400 font-bold'
+                          : 'text-neutral-600 font-normal'
+                      }`}
+                    >
+                      {slot.statusLabel}
+                    </span>
                   </button>
-                ))}
+                );
+              })}
+            </div>
+
+            {/* Leyenda de Colores Indicativa */}
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 pt-3 pb-1 border-t border-neutral-800/80 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded border border-[#C8A45C] bg-[#181818] flex items-center justify-center shadow-sm">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#C8A45C]" />
+                </div>
+                <span className="text-neutral-300 font-medium">
+                  Disponible (<strong className="text-[#C8A45C] font-semibold">Libre</strong>)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded border border-neutral-700 bg-neutral-900/60 flex items-center justify-center opacity-60">
+                  <div className="w-1.5 h-1.5 rounded-full bg-neutral-500" />
+                </div>
+                <span className="text-neutral-500 font-medium">
+                  Hora pasada (<span className="text-neutral-500">Pasado</span>)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-3.5 h-3.5 rounded border border-red-700/60 bg-red-950/40 flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                </div>
+                <span className="text-red-400/90 font-medium">
+                  Agotado / Lleno (<strong className="text-red-400 font-semibold">Lleno</strong>)
+                </span>
               </div>
             </div>
           </div>
 
+          {/* Desglose del Turno y Asignación de Servicios */}
+          {selectedSlot && selectedSlotObj && selectedSlotObj.status === 'disponible' ? (
+            <div className="bg-[#181818] border border-[#C8A45C]/35 rounded-xl p-4 sm:p-5 space-y-3 shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-[#C8A45C]/10 text-[#C8A45C]">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs text-neutral-400 block">Horario de Atención Estimado:</span>
+                    <span className="text-sm sm:text-base font-bold text-white">
+                      {selectedSlot} hrs <span className="text-[#C8A45C]">→</span> {selectedSlotObj.overallEndTime} hrs
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs px-3 py-1 rounded-full bg-[#C8A45C]/15 text-[#C8A45C] border border-[#C8A45C]/30 font-semibold">
+                  Duración Total: {totalDurationMinutes} min
+                </span>
+              </div>
+
+              {/* Distribución secuencial por servicio y especialista */}
+              {selectedSlotObj.servicePlans && selectedSlotObj.servicePlans.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block">
+                    Distribución de especialistas por bloque de servicio:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {selectedSlotObj.servicePlans.map((plan, idx) => (
+                      <div
+                        key={`${plan.serviceId}-${idx}`}
+                        className="bg-[#121212] border border-neutral-800 rounded-lg p-3 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-white font-semibold truncate">{plan.serviceName}</p>
+                          <p className="text-[11px] text-neutral-400 flex items-center gap-1.5 mt-0.5">
+                            <User className="w-3 h-3 text-[#C8A45C]" />
+                            <span className="text-neutral-300">{plan.employeeName}</span>
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-[#C8A45C] font-bold block">{plan.startTime} - {plan.endTime}</span>
+                          <span className="text-[10px] text-neutral-500">{plan.durationMinutes} min</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl p-4 text-center text-xs text-neutral-400 flex items-center justify-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#C8A45C]" />
+              <span>
+                {availableSlotsCount > 0
+                  ? 'Selecciona un bloque con estado Libre en la cuadrícula para continuar.'
+                  : 'No hay cupos disponibles para la fecha seleccionada. Por favor, elige otro día.'}
+              </span>
+            </div>
+          )}
+
+          {/* Navegación */}
           <div className="flex items-center justify-between pt-4 border-t border-neutral-800">
             <button
               type="button"
               onClick={() => setCurrentStep(2)}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white transition flex items-center gap-1.5"
+              className="px-4 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Atrás</span>
@@ -546,8 +694,13 @@ export const PublicBookingFlow: React.FC = () => {
 
             <button
               type="button"
+              disabled={!selectedSlot || selectedSlotObj?.status !== 'disponible'}
               onClick={() => setCurrentStep(4)}
-              className="px-6 py-2.5 rounded-xl text-xs font-semibold bg-[#C8A45C] hover:bg-[#D4AF37] text-black shadow transition flex items-center gap-2"
+              className={`px-6 py-2.5 rounded-xl text-xs font-semibold shadow transition flex items-center gap-2 ${
+                selectedSlot && selectedSlotObj?.status === 'disponible'
+                  ? 'bg-[#C8A45C] hover:bg-[#D4AF37] text-black cursor-pointer font-bold'
+                  : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+              }`}
             >
               <span>Continuar a Datos Personales</span>
               <ArrowRight className="w-4 h-4" />

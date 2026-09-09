@@ -821,15 +821,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   ? srv.service_id
                   : null;
 
+              const srvEmp = employees.find(
+                (e) => e.id === srv.employee_id || e.full_name === srv.employee_name
+              );
+              const srvEmpId =
+                srv.employee_id && srv.employee_id.includes('-') && srv.employee_id.length === 36
+                  ? srv.employee_id
+                  : srvEmp && srvEmp.id.includes('-') && srvEmp.id.length === 36
+                  ? srvEmp.id
+                  : safeEmployeeId;
+
+              const srvHoraInicio = srv.hora_inicio || srv.start_time || bookingData.start_time;
+              const srvHoraFin = srv.hora_fin || srv.end_time || bookingData.end_time;
+
               return {
                 booking_id: insertedBooking.id,
                 service_id: srvId,
                 service_name: srv.service_name,
                 service_price_cents: srv.price_cents,
                 duration_minutes: srv.duration_minutes,
-                assigned_employee_id: safeEmployeeId,
-                hora_inicio: bookingData.start_time,
-                hora_fin: bookingData.end_time,
+                assigned_employee_id: srvEmpId,
+                hora_inicio: srvHoraInicio,
+                hora_fin: srvHoraFin,
+                start_time: srvHoraInicio,
+                end_time: srvHoraFin,
                 status: 'confirmada',
               };
             });
