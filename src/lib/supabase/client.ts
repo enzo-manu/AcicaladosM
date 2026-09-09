@@ -10,16 +10,25 @@ const supabaseUrl =
   env.NEXT_PUBLIC_SUPABASE_URL ||
   procEnv.VITE_SUPABASE_URL ||
   procEnv.NEXT_PUBLIC_SUPABASE_URL ||
-  'https://ydvqzgyhymjgbyfkxqhd.supabase.co';
+  '';
 
 const supabaseAnonKey =
   env.VITE_SUPABASE_ANON_KEY ||
   env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   procEnv.VITE_SUPABASE_ANON_KEY ||
   procEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkdnF6Z3loeW1qZ2J5Zmt4cWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NTczNDYsImV4cCI6MjEwNDQzMzM0Nn0.7jGqXpA1Cq6yFgFHtpQTkm-sMOC5c5juUZQLWVWzMgU';
+  '';
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    '[Supabase Client] Advertencia: Las variables de entorno VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY no están configuradas.'
+  );
+}
+
+const validUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const validKey = supabaseAnonKey || 'placeholder-anon-key';
+
+export const supabase = createClient<Database>(validUrl, validKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -33,7 +42,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 });
 
 export function createSupabaseBrowserClient() {
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey);
+  return createBrowserClient<Database>(validUrl, validKey);
 }
 
 export default supabase;

@@ -9,15 +9,8 @@ import { createServerClient, parseCookieHeader, serializeCookieHeader } from '@s
  * utilizando @supabase/ssr y persistir la sesión segura en cookies HTTP.
  */
 function supabaseAuthCallbackPlugin(env: Record<string, string>) {
-  const supabaseUrl =
-    env.VITE_SUPABASE_URL ||
-    env.NEXT_PUBLIC_SUPABASE_URL ||
-    'https://ydvqzgyhymjgbyfkxqhd.supabase.co';
-
-  const supabaseAnonKey =
-    env.VITE_SUPABASE_ANON_KEY ||
-    env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkdnF6Z3loeW1qZ2J5Zmt4cWhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NTczNDYsImV4cCI6MjEwNDQzMzM0Nn0.7jGqXpA1Cq6yFgFHtpQTkm-sMOC5c5juUZQLWVWzMgU';
+  const supabaseUrl = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   return {
     name: 'supabase-auth-callback-handler',
@@ -30,6 +23,12 @@ function supabaseAuthCallbackPlugin(env: Record<string, string>) {
             const nextParam = url.searchParams.get('next');
 
             if (code) {
+              if (!supabaseUrl || !supabaseAnonKey) {
+                console.warn('[Vite Auth Handler] Variables VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY no configuradas.');
+                next();
+                return;
+              }
+
               const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
                 cookies: {
                   getAll() {
