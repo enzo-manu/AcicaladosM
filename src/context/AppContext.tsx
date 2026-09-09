@@ -17,6 +17,7 @@ import {
   CartItem,
   BookingStatus,
   WardrobeStatus,
+  LightboxData,
 } from '../types';
 import {
   INITIAL_SERVICES,
@@ -81,6 +82,11 @@ interface AppContextType {
   activeTicket: { type: 'booking' | 'venta'; data: Booking | VentaMostrador } | null;
   openTicketModal: (type: 'booking' | 'venta' | 'pos', data: Booking | VentaMostrador) => void;
   closeTicketModal: () => void;
+
+  // Image Lightbox State
+  lightboxImage: LightboxData | null;
+  openLightbox: (data: LightboxData) => void;
+  closeLightbox: () => void;
 
   // Realtime Simulation / Supabase Realtime
   realtimeConnected: boolean;
@@ -250,6 +256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [activeTicket, setActiveTicket] = useState<{ type: 'booking' | 'venta'; data: Booking | VentaMostrador } | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<LightboxData | null>(null);
   const [realtimeConnected, setRealtimeConnected] = useState<boolean>(true);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date>(new Date());
 
@@ -717,6 +724,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const closeTicketModal = useCallback(() => {
     setActiveTicket(null);
+  }, []);
+
+  // Lightbox Actions
+  const openLightbox = useCallback((data: LightboxData) => {
+    setLightboxImage(data);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxImage(null);
   }, []);
 
   // Cart Functions
@@ -2380,6 +2396,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeTicket,
         openTicketModal,
         closeTicketModal,
+        lightboxImage,
+        openLightbox,
+        closeLightbox,
         realtimeConnected,
         pulseRealtime,
         lastSyncTimestamp,

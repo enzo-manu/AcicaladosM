@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Layers,
+  Maximize2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Service } from '../../types';
@@ -281,7 +282,7 @@ async function compressImageToWebP(file: File, quality = 0.85, maxWidth = 1200):
 // COMPONENTE PRINCIPAL
 // ==========================================
 export const ServiciosManager: React.FC = () => {
-  const { services, currentRole, addService, updateService, deleteService, toggleServiceActive } = useApp();
+  const { services, currentRole, addService, updateService, deleteService, toggleServiceActive, openLightbox } = useApp();
 
   // Permisos: Administrador o Recepcionista
   const isAuthorized = currentRole === 'admin' || currentRole === 'recepcionista';
@@ -870,7 +871,20 @@ export const ServiciosManager: React.FC = () => {
                 className="group bg-[#121212] border border-neutral-800/90 hover:border-[#C8A45C]/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 hover:shadow-xl hover:shadow-[#C8A45C]/5"
               >
                 {/* Imagen y Badges */}
-                <div className="relative aspect-video w-full bg-neutral-900 overflow-hidden">
+                <div
+                  onClick={() =>
+                    openLightbox({
+                      url: srv.image_url,
+                      title: srv.name,
+                      description: srv.description,
+                      category: srv.category === 'barberia' ? 'Barbería' : 'Spa',
+                      price: `S/ ${priceFormatted}`,
+                      metadata: `${formattedDuration} (${srv.duration_minutes} min)`,
+                    })
+                  }
+                  className="relative aspect-video w-full bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
+                  title="Clic para ampliar imagen"
+                >
                   <img
                     src={srv.image_url}
                     alt={srv.name}
@@ -882,6 +896,14 @@ export const ServiciosManager: React.FC = () => {
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+                  {/* Indicador de Zoom al Hover */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 pointer-events-none">
+                    <span className="px-3 py-1.5 rounded-xl bg-black/80 border border-[#C8A45C]/60 text-[#E6C875] text-xs font-semibold flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span>Ver imagen</span>
+                    </span>
+                  </div>
 
                   {/* Badge de Categoría */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5">
@@ -1245,7 +1267,25 @@ export const ServiciosManager: React.FC = () => {
                   />
 
                   {/* Vista Previa */}
-                  <div className="w-24 h-20 rounded-xl bg-neutral-900 border border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center relative">
+                  <div
+                    onClick={(e) => {
+                      if (formImageUrl) {
+                        e.stopPropagation();
+                        openLightbox({
+                          url: formImageUrl,
+                          title: formName || 'Vista Previa del Servicio',
+                          description: formDescription,
+                          category: formCategory === 'barberia' ? 'Barbería' : 'Spa',
+                          price: formPriceSoles ? `S/ ${formPriceSoles}` : undefined,
+                          metadata: `${computedSmartPreview} (${computedDurationMinutes} min)`,
+                        });
+                      }
+                    }}
+                    className={`w-24 h-20 rounded-xl bg-neutral-900 border border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center relative ${
+                      formImageUrl ? 'cursor-zoom-in hover:border-[#C8A45C]' : ''
+                    }`}
+                    title={formImageUrl ? 'Clic para ampliar vista previa' : undefined}
+                  >
                     {formImageUrl ? (
                       <img
                         src={formImageUrl}

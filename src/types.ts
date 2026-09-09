@@ -283,3 +283,14 @@ export function formatLimaDate(dateString: string): string {
   }
   return dateString;
 }
+
+export interface LightboxData {
+  url: string;
+  title: string;
+  description?: string;
+  category?: string;
+  badge?: string;
+  code?: string;
+  price?: string;
+  metadata?: string;
+}

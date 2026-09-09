@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles, WardrobeItem } from '../../types';
-import { Shirt, MessageSquare, Sparkles, Shield, Tag, Calendar } from 'lucide-react';
+import { Shirt, MessageSquare, Sparkles, Shield, Tag, Calendar, Maximize2 } from 'lucide-react';
 
 export const PublicWardrobe: React.FC = () => {
-  const { wardrobe } = useApp();
+  const { wardrobe, openLightbox } = useApp();
   const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Las 5 categorías de evento exactas
@@ -93,18 +93,40 @@ export const PublicWardrobe: React.FC = () => {
                 className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/50 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between group transition duration-300 hover:shadow-2xl hover:shadow-[#C8A45C]/5"
               >
                 {/* Imagen y Badges */}
-                <div className="relative aspect-[4/3] bg-neutral-900 overflow-hidden">
-                  <img
-                    src={item.image_url}
-                    alt={item.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                <div
+              onClick={() =>
+                openLightbox({
+                  url: item.image_url,
+                  title: item.name,
+                  description: item.description,
+                  category: item.category,
+                  code: `Código: ${codeDisplay}`,
+                  price: `Alquiler: S/ ${priceFormatted}`,
+                  metadata: `Talla: ${item.size || 'Ajustable'}${item.deposit_cents ? ` · Garantía: ${formatSoles(item.deposit_cents)}` : ''}`,
+                })
+              }
+              className="relative aspect-[4/3] bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
+              title="Clic para ampliar imagen"
+            >
+              <img
+                src={item.image_url}
+                alt={item.name}
+                className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+              {/* Indicador de Zoom al Hover */}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 pointer-events-none">
+                <span className="px-3 py-1.5 rounded-xl bg-black/80 border border-[#C8A45C]/60 text-[#E6C875] text-xs font-semibold flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Ver imagen</span>
+                </span>
+              </div>
 
                   {/* Badge Dorado del Código Interno */}
                   <div className="absolute top-3 left-3">

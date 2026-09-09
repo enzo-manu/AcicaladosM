@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { TicketTermicoModal } from './components/common/TicketTermicoModal';
+import { ImageLightboxModal } from './components/common/ImageLightboxModal';
 import { CartDrawer } from './components/common/CartDrawer';
 import { Navbar } from './components/common/Navbar';
 import { AdminSidebar } from './components/dashboard/AdminSidebar';
@@ -52,6 +53,9 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full overflow-x-hidden">
       {/* Global Thermal Ticket Modal */}
       <TicketTermicoModal />
+
+      {/* Global Image Lightbox Modal */}
+      <ImageLightboxModal />
 
       {/* Global Shopping Cart Drawer */}
       <CartDrawer />

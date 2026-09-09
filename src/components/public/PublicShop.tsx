@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles, Product } from '../../types';
-import { ShoppingBag, Plus, Sparkles, Check, Search } from 'lucide-react';
+import { ShoppingBag, Plus, Sparkles, Check, Search, Maximize2 } from 'lucide-react';
 
 export const PublicShop: React.FC = () => {
-  const { products, addToCart, setIsCartOpen } = useApp();
+  const { products, addToCart, setIsCartOpen, openLightbox } = useApp();
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -87,13 +87,36 @@ export const PublicShop: React.FC = () => {
             key={product.id}
             className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between group transition duration-300"
           >
-            <div className="relative h-48 bg-neutral-900 overflow-hidden">
+            <div
+              onClick={() =>
+                openLightbox({
+                  url: product.image_url,
+                  title: product.name,
+                  description: product.description,
+                  category: categories.find((c) => c.id === product.category)?.label || product.category,
+                  price: formatSoles(product.price_cents),
+                  metadata: `Stock: ${product.stock} un.`,
+                })
+              }
+              className="relative h-48 bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
+              title="Clic para ampliar imagen"
+            >
               <img
                 src={product.image_url}
                 alt={product.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80';
+                }}
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                <span className="px-3 py-1.5 rounded-xl bg-black/80 border border-[#C8A45C]/60 text-[#E6C875] text-xs font-semibold flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Ver imagen</span>
+                </span>
+              </div>
               <div className="absolute top-2.5 right-2.5">
                 <span className="text-[10px] bg-black/75 backdrop-blur-sm text-neutral-300 px-2 py-0.5 rounded border border-neutral-800 font-medium">
                   Stock: {product.stock} un.

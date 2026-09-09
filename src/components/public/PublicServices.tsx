@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles } from '../../types';
-import { Scissors, Sparkles, Clock, Calendar, Check, ArrowRight } from 'lucide-react';
+import { Scissors, Sparkles, Clock, Calendar, Check, ArrowRight, Maximize2 } from 'lucide-react';
 
 export const PublicServices: React.FC = () => {
-  const { services, setActiveView } = useApp();
+  const { services, setActiveView, openLightbox } = useApp();
   const [filterCategory, setFilterCategory] = useState<'all' | 'barberia' | 'spa'>('all');
 
   const filtered = services.filter((s) => {
@@ -74,13 +74,36 @@ export const PublicServices: React.FC = () => {
             key={service.id}
             className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/40 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between group transition duration-300"
           >
-            <div className="relative h-48 w-full overflow-hidden bg-neutral-900">
+            <div
+              onClick={() =>
+                openLightbox({
+                  url: service.image_url,
+                  title: service.name,
+                  description: service.description,
+                  category: service.category === 'barberia' ? 'Barbería' : 'Spa',
+                  price: formatSoles(service.price_cents),
+                  metadata: `${service.duration_minutes} min`,
+                })
+              }
+              className="relative h-48 w-full overflow-hidden bg-neutral-900 cursor-zoom-in group/img"
+              title="Clic para ampliar imagen"
+            >
               <img
                 src={service.image_url}
                 alt={service.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80';
+                }}
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                <span className="px-3 py-1.5 rounded-xl bg-black/80 border border-[#C8A45C]/60 text-[#E6C875] text-xs font-semibold flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Ver imagen</span>
+                </span>
+              </div>
               <div className="absolute top-3 left-3">
                 <span
                   className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-md shadow ${
