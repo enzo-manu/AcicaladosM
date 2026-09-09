@@ -539,96 +539,32 @@ export const Navbar: React.FC = () => {
                 </nav>
               </div>
 
-              {/* Sección: Mi Cuenta, Citas y Gestión */}
-              <div className="space-y-1 pt-3 border-t border-[#C8A45C]/20">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-[#C8A45C]/80 px-2 py-1 block text-left">
-                  Mi Cuenta &amp; Gestión
-                </span>
-
-                <div className="space-y-1 text-left w-full">
-                  {/* Panel de Control Staff (Admin / Recepción) */}
-                  {isStaffRole && (
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick('/dashboard')}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#C8A45C]/15 border border-[#C8A45C]/40 text-[#E6C875] hover:bg-[#C8A45C]/25 transition cursor-pointer mb-1 shadow-sm"
-                    >
-                      <div className="flex items-center gap-3">
-                        <LayoutDashboard className="w-4 h-4 text-[#C8A45C]" />
-                        <span>Panel de Control</span>
-                      </div>
-                      <span className="text-[9px] uppercase tracking-wider bg-[#C8A45C] text-black px-2 py-0.5 rounded font-extrabold">
-                        Staff
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Mis Citas / Mis Reservas */}
+              {/* Opción de Cerrar Sesión (únicamente si está autenticado) */}
+              {isAuthenticated && (
+                <div className="pt-2 border-t border-[#C8A45C]/20">
                   <button
                     type="button"
-                    onClick={() => handleNavClick(isAuthenticated ? '/mi-cuenta' : '/auth/login')}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-300 hover:text-white hover:bg-neutral-900 transition cursor-pointer font-medium"
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer font-medium"
                   >
-                    <Calendar className="w-4 h-4 text-[#C8A45C]" />
-                    <span>Mis Citas / Reservas</span>
+                    <LogOut className="w-4 h-4 text-red-400" />
+                    <span>Cerrar Sesión</span>
                   </button>
-
-                  {/* Mi Cuenta */}
-                  <button
-                    type="button"
-                    onClick={() => handleNavClick(isAuthenticated ? '/mi-cuenta' : '/auth/login')}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-300 hover:text-white hover:bg-neutral-900 transition cursor-pointer font-medium"
-                  >
-                    <User className="w-4 h-4 text-[#C8A45C]" />
-                    <span>Mi Cuenta</span>
-                  </button>
-
-                  {/* Iniciar Sesión / Cerrar Sesión */}
-                  {isAuthenticated ? (
-                    <button
-                      type="button"
-                      onClick={handleSignOut}
-                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer font-medium"
-                    >
-                      <LogOut className="w-4 h-4 text-red-400" />
-                      <span>Cerrar Sesión</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleNavClick('/auth/login')}
-                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-[#C8A45C] font-semibold hover:text-white hover:bg-[#C8A45C]/15 transition cursor-pointer"
-                    >
-                      <LogIn className="w-4 h-4 text-[#C8A45C]" />
-                      <span>Iniciar Sesión / Registro</span>
-                    </button>
-                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Atajos Rápidos en Móvil: Buscar & Carrito */}
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#C8A45C]/20">
+              {/* Atajo Rápido en Móvil: Buscar */}
+              <div className="pt-2 border-t border-[#C8A45C]/20">
                 <button
                   type="button"
                   onClick={() => {
                     setMobileMenuOpen(false);
                     setSearchModalOpen(true);
                   }}
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 transition"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 hover:text-white hover:bg-neutral-800 transition cursor-pointer shadow-sm"
                 >
                   <Search className="w-3.5 h-3.5 text-[#C8A45C]" />
                   <span>Buscar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setIsCartOpen(true);
-                  }}
-                  className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 transition relative"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5 text-[#C8A45C]" />
-                  <span>Carrito ({cartCount})</span>
                 </button>
               </div>
             </div>
