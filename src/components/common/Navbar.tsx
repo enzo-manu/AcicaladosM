@@ -444,7 +444,7 @@ export const Navbar: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top: Header with Brand & Close Button */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="w-full flex items-center justify-between pb-3.5 border-b border-[#C8A45C]/25">
                 <div className="flex items-center gap-2">
                   <img src="/LogoAcicalados.svg" alt="Acicalados" className="h-7 w-auto object-contain" />
@@ -463,7 +463,7 @@ export const Navbar: React.FC = () => {
               </div>
 
               {/* User Profile Card inside Drawer */}
-              <div className="p-3 rounded-2xl bg-[#141414] border border-[#C8A45C]/25 flex items-center justify-between gap-3 shadow-inner">
+              <div className="p-3.5 rounded-2xl bg-[#141414] border border-[#C8A45C]/25 flex items-center justify-between gap-3 shadow-inner">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/35 text-[#E6C875] flex items-center justify-center shrink-0">
                     <User className="w-4 h-4" />
@@ -500,11 +500,11 @@ export const Navbar: React.FC = () => {
               </div>
 
               {/* Secciones Principales de Navegación */}
-              <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-[#C8A45C]/80 px-2 py-1 block text-left">
+              <div className="space-y-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-[#C8A45C]/80 px-2 py-0.5 block text-left">
                   Navegación Principal
                 </span>
-                <nav className="space-y-1 text-left w-full">
+                <nav className="space-y-1.5 text-left w-full">
                   {navLinks.map((item) => {
                     const isActive =
                       item.view === '/'
@@ -518,17 +518,17 @@ export const Navbar: React.FC = () => {
                         key={item.view}
                         type="button"
                         onClick={() => handleNavClick(item.view)}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm transition cursor-pointer ${
+                        className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm transition-all duration-200 cursor-pointer ${
                           isActive
-                            ? 'bg-[#C8A45C]/20 text-[#E6C875] border border-[#C8A45C]/50 font-bold shadow-sm'
-                            : 'text-neutral-300 hover:text-white hover:bg-neutral-900 border border-transparent font-medium'
+                            ? 'bg-[#C8A45C]/20 text-[#E6C875] border border-[#C8A45C]/55 font-bold shadow-md shadow-black/40'
+                            : 'text-neutral-300 hover:text-white hover:bg-neutral-900/80 border border-transparent font-medium hover:border-neutral-800'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3.5">
                           <span className={isActive ? 'text-[#E6C875]' : 'text-[#C8A45C]'}>
                             {item.icon}
                           </span>
-                          <span>{item.label}</span>
+                          <span className="tracking-wide">{item.label}</span>
                         </div>
                         {isActive && (
                           <div className="w-1.5 h-1.5 rounded-full bg-[#E6C875] shadow-[0_0_8px_#E6C875]" />
@@ -538,14 +538,17 @@ export const Navbar: React.FC = () => {
                   })}
                 </nav>
               </div>
+            </div>
 
-              {/* Opción de Cerrar Sesión (únicamente si está autenticado) */}
+            {/* Bottom: Cerrar Sesión & Footer Info */}
+            <div className="pt-4 space-y-3">
+              {/* Opción de Cerrar Sesión (al fondo, sutilmente separada con divisor limpio) */}
               {isAuthenticated && (
                 <div className="pt-2 border-t border-[#C8A45C]/20">
                   <button
                     type="button"
                     onClick={handleSignOut}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer font-medium"
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer font-medium"
                   >
                     <LogOut className="w-4 h-4 text-red-400" />
                     <span>Cerrar Sesión</span>
@@ -553,30 +556,15 @@ export const Navbar: React.FC = () => {
                 </div>
               )}
 
-              {/* Atajo Rápido en Móvil: Buscar */}
-              <div className="pt-2 border-t border-[#C8A45C]/20">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setSearchModalOpen(true);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs font-semibold hover:border-[#C8A45C]/40 hover:text-white hover:bg-neutral-800 transition cursor-pointer shadow-sm"
-                >
-                  <Search className="w-3.5 h-3.5 text-[#C8A45C]" />
-                  <span>Buscar</span>
-                </button>
+              {/* Bottom Slogan & City */}
+              <div className="w-full pt-3 pb-1 border-t border-[#C8A45C]/15 text-center space-y-0.5">
+                <span className="text-[10px] text-[#C8A45C]/60 tracking-[0.2em] font-semibold block uppercase">
+                  Spa Acicalados Barber Shop
+                </span>
+                <span className="text-[9px] text-neutral-500 block font-mono">
+                  Sede Pichari · Cusco, Perú
+                </span>
               </div>
-            </div>
-
-            {/* Bottom Slogan & City */}
-            <div className="w-full pt-4 pb-1 border-t border-[#C8A45C]/15 text-center space-y-0.5">
-              <span className="text-[10px] text-[#C8A45C]/60 tracking-[0.2em] font-semibold block uppercase">
-                Spa Acicalados Barber Shop
-              </span>
-              <span className="text-[9px] text-neutral-500 block font-mono">
-                Sede Pichari · Cusco, Perú
-              </span>
             </div>
           </div>
         </div>
