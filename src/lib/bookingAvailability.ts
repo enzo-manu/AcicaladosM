@@ -15,15 +15,38 @@ export const BUSINESS_HOURS = {
   slotIntervalMinutes: 30,
 };
 
-// Generar los 24 bloques exactos de 30 minutos desde 09:00 hasta 20:30
-export const ALL_30MIN_SLOTS: string[] = [
-  '09:00', '09:30', '10:00', '10:30',
-  '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30',
-  '15:00', '15:30', '16:00', '16:30',
-  '17:00', '17:30', '18:00', '18:30',
-  '19:00', '19:30', '20:00', '20:30',
-];
+/**
+ * Genera dinámicamente los bloques de tiempo (slots) de 30 minutos entre la hora de apertura y cierre.
+ * @param openTime Hora oficial de apertura (por defecto 09:00)
+ * @param closeTime Hora oficial de cierre (por defecto 21:00)
+ * @param intervalMinutes Intervalo en minutos entre cada bloque (por defecto 30)
+ */
+export function generateSlots(
+  openTime: string = BUSINESS_HOURS.open,
+  closeTime: string = BUSINESS_HOURS.close,
+  intervalMinutes: number = 30
+): string[] {
+  const startMin = timeToMinutes(openTime);
+  const endMin = timeToMinutes(closeTime);
+
+  // Fallback si la configuración es inválida o close <= open
+  if (isNaN(startMin) || isNaN(endMin) || endMin <= startMin) {
+    return generateSlots(BUSINESS_HOURS.open, BUSINESS_HOURS.close, intervalMinutes);
+  }
+
+  const slots: string[] = [];
+  for (let m = startMin; m < endMin; m += intervalMinutes) {
+    slots.push(minutesToTime(m));
+  }
+  return slots;
+}
+
+// Bloques estándar de 30 minutos (09:00 a 20:30 hrs) como referencia compatible
+export const ALL_30MIN_SLOTS: string[] = generateSlots(
+  BUSINESS_HOURS.open,
+  BUSINESS_HOURS.close,
+  30
+);
 
 export type SlotStatus = 'disponible' | 'pasado' | 'lleno';
 export type SlotStatusLabel = 'Libre' | 'Pasado' | 'Lleno';
@@ -247,6 +270,8 @@ export function computeSlotsAvailability(params: {
   employeeBlocks: EmployeeBlock[];
   bookings: Booking[];
   currentLimaDateTime?: { dateStr: string; timeStr: string; totalMinutes: number };
+  openTime?: string;
+  closeTime?: string;
 }): ComputedSlot[] {
   const {
     bookingDate,
@@ -255,11 +280,16 @@ export function computeSlotsAvailability(params: {
     employeeBlocks,
     bookings,
     currentLimaDateTime,
+    openTime = BUSINESS_HOURS.open,
+    closeTime = BUSINESS_HOURS.close,
   } = params;
 
   const limaNow = currentLimaDateTime || getLimaDateTime();
   const isSelectedDateToday = bookingDate === limaNow.dateStr;
   const isSelectedDatePast = bookingDate < limaNow.dateStr;
+
+  // Generar dinámicamente los bloques a partir del horario configurado en el sistema
+  const activeSlots = generateSlots(openTime, closeTime, 30);
 
   // Si no hay servicios seleccionados, duración estimada de 45 min
   const effectiveServices: Service[] =
@@ -285,7 +315,7 @@ export function computeSlotsAvailability(params: {
     0
   );
 
-  return ALL_30MIN_SLOTS.map((slotTime) => {
+  return activeSlots.map((slotTime) => {
     const slotStartMin = timeToMinutes(slotTime);
     const overallEndMin = slotStartMin + totalDuration;
     const overallEndTime = minutesToTime(overallEndMin);
@@ -316,21 +346,7 @@ export function computeSlotsAvailability(params: {
       };
     }
 
-    // 2. REGLA DE HORARIO DE ATENCIÓN:
-    // El servicio completo no puede exceder las 21:00 (hora de cierre)
-    if (overallEndMin > BUSINESS_HOURS.closeMinutes) {
-      return {
-        time: slotTime,
-        status: 'lleno',
-        statusLabel: 'Lleno',
-        isSelectable: false,
-        totalDurationMinutes: totalDuration,
-        overallEndTime,
-        reason: 'Excede el horario de cierre (21:00 hrs)',
-      };
-    }
-
-    // 3. REGLA DE CONCURRENCIA EQUITATIVA Y CAPACIDAD POR ESPECIALISTA:
+    // 2. REGLA DE CONCURRENCIA EQUITATIVA Y CAPACIDAD POR ESPECIALISTA:
     // Evaluar cada servicio de forma independiente y secuencial
     let currentServiceStartMin = slotStartMin;
     const servicePlans: ServiceExecutionPlan[] = [];

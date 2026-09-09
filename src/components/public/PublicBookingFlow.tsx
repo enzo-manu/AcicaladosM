@@ -49,6 +49,7 @@ export const PublicBookingFlow: React.FC = () => {
     currentRole,
     setActiveView,
     paymentSettings,
+    attendanceSettings,
   } = useApp();
 
   // Step 1 to 5
@@ -105,6 +106,9 @@ export const PublicBookingFlow: React.FC = () => {
     });
   };
 
+  const openTime = attendanceSettings?.shift_entry_time || '09:00';
+  const closeTime = attendanceSettings?.shift_exit_time || '21:00';
+
   // Cálculo estricto de disponibilidad en bloques de 30 minutos y concurrencia por especialista
   const computedSlots: ComputedSlot[] = useMemo(() => {
     return computeSlotsAvailability({
@@ -114,8 +118,10 @@ export const PublicBookingFlow: React.FC = () => {
       employeeBlocks,
       bookings,
       currentLimaDateTime: limaClock,
+      openTime,
+      closeTime,
     });
-  }, [bookingDate, selectedServices, employees, employeeBlocks, bookings, limaClock]);
+  }, [bookingDate, selectedServices, employees, employeeBlocks, bookings, limaClock, openTime, closeTime]);
 
   // Slot seleccionado actualmente
   const selectedSlotObj = useMemo(() => {
@@ -527,16 +533,21 @@ export const PublicBookingFlow: React.FC = () => {
 
           {/* Time Slots Grid (Bloques de 30 Minutos) */}
           <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-semibold text-neutral-300 block">
-                Cuadrícula de Horarios para el {bookingDate}:
-              </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-neutral-300 block">
+                  Cuadrícula de Horarios para el {bookingDate}:
+                </label>
+                <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#1C1C1C] text-[#E6C875] border border-[#C8A45C]/30 font-mono font-medium">
+                  {openTime} - {closeTime} hrs
+                </span>
+              </div>
               <span className="text-[11px] font-medium text-neutral-400">
-                <strong className="text-[#C8A45C]">{availableSlotsCount}</strong> de 24 bloques disponibles
+                <strong className="text-[#C8A45C]">{availableSlotsCount}</strong> de {computedSlots.length} bloques disponibles
               </span>
             </div>
 
-            {/* Cuadrícula de 24 bloques de 30 minutos (09:00 a 20:30) */}
+            {/* Cuadrícula dinámica de bloques de 30 minutos */}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-6 gap-2 sm:gap-2.5">
               {computedSlots.map((slot) => {
                 const isSelected = selectedSlot === slot.time;

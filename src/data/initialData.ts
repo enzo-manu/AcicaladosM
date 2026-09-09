@@ -1839,8 +1839,7 @@ export const INITIAL_BONUS_SETTINGS: BonusSettings = {
 
 export const INITIAL_ATTENDANCE_SETTINGS: AttendanceSettings = {
   shift_entry_time: '09:00',
-  shift_exit_time: '19:00',
+  shift_exit_time: '21:00',
   entry_tolerance_minutes: 15,
   exit_tolerance_minutes: 15,
 };
-

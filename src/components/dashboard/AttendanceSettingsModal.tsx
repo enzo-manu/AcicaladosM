@@ -99,7 +99,7 @@ export const AttendanceSettingsModal: React.FC<AttendanceSettingsModalProps> = (
           <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3.5 text-xs text-neutral-400 flex items-start gap-2.5">
             <Info className="w-4 h-4 text-[#C8A45C] shrink-0 mt-0.5" />
             <p leading-relaxed>
-              Estos parámetros rigen el cálculo automático de puntualidad (tardanzas) y la contabilización de horas extra a favor de los colaboradores al escanear su código QR.
+              Estos parámetros rigen el horario de atención para reservas públicas (inicio y fin de la cuadrícula de citas), así como el cálculo automático de puntualidad y horas extra del personal.
             </p>
           </div>
 
@@ -108,7 +108,7 @@ export const AttendanceSettingsModal: React.FC<AttendanceSettingsModalProps> = (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Hora Oficial de Entrada</span>
+                <span>Hora Oficial de Entrada / Apertura</span>
               </label>
               <input
                 type="time"
@@ -144,7 +144,7 @@ export const AttendanceSettingsModal: React.FC<AttendanceSettingsModalProps> = (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-blue-400" />
-                <span>Hora Oficial de Salida</span>
+                <span>Hora Oficial de Salida / Cierre</span>
               </label>
               <input
                 type="time"
@@ -153,7 +153,7 @@ export const AttendanceSettingsModal: React.FC<AttendanceSettingsModalProps> = (
                 onChange={(e) => setExitTime(e.target.value)}
                 className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 text-sm font-mono outline-none focus:border-[#C8A45C]"
               />
-              <span className="text-[10px] text-neutral-500 block">Ejemplo: 07:00 PM (19:00)</span>
+              <span className="text-[10px] text-neutral-500 block">Ejemplo: 09:00 PM (21:00)</span>
             </div>
 
             {/* Tolerancia de salida */}
