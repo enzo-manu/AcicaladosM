@@ -327,7 +327,7 @@ export const ColaboradoresView: React.FC = () => {
   const handleOpenBadge = async (emp: Employee) => {
     if (!isAdmin) return;
     setBadgeEmp(emp);
-    const qrData = `ACICALADOS-EMP-${emp.id}-${emp.dni || 'PASS'}`;
+    const qrData = emp.qr_code || `ACICALADOS-EMP-${emp.id}-${emp.dni || 'PASS'}`;
     try {
       const dataUrl = await QRCode.toDataURL(qrData, {
         width: 260,
