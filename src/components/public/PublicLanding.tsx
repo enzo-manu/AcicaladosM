@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles } from '../../types';
+import { HeroParticleTitle } from './HeroParticleTitle';
 import {
   Scissors,
   Sparkles,
@@ -55,12 +56,7 @@ export const PublicLanding: React.FC = () => {
             <span>Experiencia de Cuidado Personal & Estilo en Pichari</span>
           </div>
 
-          <h1 className="font-serif-luxury text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.15]">
-            El Arte del Buen Gusto, <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#DFCA8D] via-[#C8A45C] to-[#9A7B38]">
-              Barbería Tradicional & Spa
-            </span>
-          </h1>
+          <HeroParticleTitle />
 
           <p className="max-w-2xl mx-auto text-sm sm:text-base text-neutral-400 font-normal leading-relaxed">
             Un santuario exclusivo donde se fusionan las técnicas clásicas del afeitado a navaja,
