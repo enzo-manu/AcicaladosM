@@ -374,23 +374,41 @@ export const VestuarioManager: React.FC = () => {
     }
   };
 
-  // Filtrado reactivo de prendas
+  // Filtrado reactivo de prendas con lógica inteligente de código
   const filteredItems = useMemo(() => {
-    return wardrobe.filter((w) => {
-      // Filtro por texto o código
-      const q = searchQuery.toLowerCase().trim();
-      const matchesText =
-        !q ||
-        w.name.toLowerCase().includes(q) ||
-        (w.code && w.code.toLowerCase().includes(q)) ||
-        (w.description && w.description.toLowerCase().includes(q));
+    const rawSearch = searchQuery.trim();
+    const q = rawSearch.toLowerCase();
+    const isSingleChar = rawSearch.length === 1;
 
-      // Filtro por categoría de evento
+    return wardrobe.filter((w) => {
+      // 1. Filtro inteligente por código o texto
+      let matchesText = true;
+      if (isSingleChar) {
+        // Regla de 1 carácter (Búsqueda estricta de código):
+        // Evalúa ÚNICAMENTE coincidencia exacta con la propiedad code para evitar ruido con descripciones
+        const itemCode = (w.code || '').trim().toLowerCase();
+        matchesText = itemCode === q;
+      } else if (q.length > 1) {
+        // Regla de múltiples caracteres (Búsqueda general):
+        // Coincidencia parcial en código, título, categoría/evento y descripción simultáneamente
+        const itemCode = (w.code || '').trim().toLowerCase();
+        const itemName = (w.name || '').toLowerCase();
+        const itemCategory = (w.category || '').toLowerCase();
+        const itemDesc = (w.description || '').toLowerCase();
+
+        matchesText =
+          itemCode.includes(q) ||
+          itemName.includes(q) ||
+          itemCategory.includes(q) ||
+          itemDesc.includes(q);
+      }
+
+      // 2. Filtro por categoría de evento
       const matchesCategory =
         selectedCategoryFilter === 'all' ||
-        w.category.toLowerCase() === selectedCategoryFilter.toLowerCase();
+        (w.category || '').toLowerCase() === selectedCategoryFilter.toLowerCase();
 
-      // Filtro por estado activo / oculto
+      // 3. Filtro por estado activo / oculto
       const isItemActive = w.active !== false;
       const matchesStatus =
         selectedStatusFilter === 'all' ||
@@ -534,17 +552,26 @@ export const VestuarioManager: React.FC = () => {
             placeholder="Buscar por código (ej. A), título, evento o descripción..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#181818] border border-neutral-700/80 rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#C8A45C] transition-colors"
+            className="w-full bg-[#181818] border border-neutral-700/80 rounded-xl pl-10 pr-28 py-2.5 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#C8A45C] transition-colors"
           />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            {searchQuery.trim().length === 1 && (
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#C8A45C]/15 border border-[#C8A45C]/40 text-[#E6C875] text-[10px] font-bold uppercase tracking-wider">
+                <Tag className="w-2.5 h-2.5" />
+                Cód: {searchQuery.trim().toUpperCase()}
+              </span>
+            )}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filtro por Categoría de Evento */}
@@ -609,7 +636,9 @@ export const VestuarioManager: React.FC = () => {
           <Shirt className="w-12 h-12 text-neutral-600 mx-auto" />
           <h3 className="text-base font-semibold text-white">No se encontraron prendas de vestuario</h3>
           <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-            {searchQuery
+            {searchQuery.trim().length === 1
+              ? `No se encontró ninguna prenda registrada con el código exacto "${searchQuery.trim().toUpperCase()}".`
+              : searchQuery
               ? `No hay coincidencias para "${searchQuery}". Prueba con otros términos.`
               : 'No hay prendas en este filtro. Agrega una nueva prenda con el botón superior.'}
           </p>

@@ -2280,7 +2280,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setWardrobe((prev) => prev.map((w) => (w.id === item.id ? updatedItem : w)));
       pulseRealtime();
 
-      if (item.id.includes('-') && item.id.length === 36) {
+      if (!item.id.startsWith('ward-')) {
         const { error } = await supabase.from('wardrobe_items').update({
           name: item.name,
           code: codeUpper,
@@ -2312,7 +2312,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setWardrobe((prev) => prev.filter((w) => w.id !== id));
       pulseRealtime();
 
-      if (id.includes('-') && id.length === 36) {
+      if (!id.startsWith('ward-')) {
         const { error } = await supabase.from('wardrobe_items').delete().eq('id', id);
         if (error) {
           console.error('Error al eliminar prenda en Supabase:', error);

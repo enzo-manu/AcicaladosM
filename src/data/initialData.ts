@@ -1400,6 +1400,7 @@ export const INITIAL_PRODUCTS: Product[] = [
 export const INITIAL_WARDROBE: WardrobeItem[] = [
   {
     id: 'ward-1',
+    code: 'A',
     name: 'Smoking Italiano Solapa Satín Negra',
     category: 'etiqueta_negra',
     rental_price_cents: 18000, // S/ 180.00
@@ -1411,6 +1412,7 @@ export const INITIAL_WARDROBE: WardrobeItem[] = [
   },
   {
     id: 'ward-2',
+    code: 'B',
     name: 'Tuxedo Azul Noche Slim Fit',
     category: 'bodas',
     rental_price_cents: 19500, // S/ 195.00
@@ -1422,6 +1424,7 @@ export const INITIAL_WARDROBE: WardrobeItem[] = [
   },
   {
     id: 'ward-3',
+    code: 'C',
     name: 'Vestido de Gala Escote Sirena Borgoña',
     category: 'graduaciones',
     rental_price_cents: 22000, // S/ 220.00
