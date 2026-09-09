@@ -161,6 +161,11 @@ export interface Booking {
   created_at: string;
   confirmed_at?: string;
   notes?: string;
+  payment_method?: string;
+  cash_cents?: number;
+  yape_cents?: number;
+  transfer_cents?: number;
+  payment_notes?: string;
 }
 
 export interface PaymentLog {
@@ -168,14 +173,16 @@ export interface PaymentLog {
   booking_id: string;
   booking_code: string;
   amount_cents: number;
-  payment_method: 'yape' | 'efectivo' | 'mixto';
+  payment_method: 'yape' | 'efectivo' | 'transferencia' | 'mixto' | string;
   cash_cents?: number;
   yape_cents?: number;
+  transfer_cents?: number;
   voucher_url?: string;
   created_at: string;
   voided: boolean;
   voided_reason?: string;
   voided_by?: string;
+  notes?: string;
 }
 
 export interface VentaMostrador {

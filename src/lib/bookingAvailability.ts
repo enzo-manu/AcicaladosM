@@ -448,3 +448,114 @@ export function computeSlotsAvailability(params: {
     };
   });
 }
+
+export interface EmployeeAvailabilityResult {
+  isAvailable: boolean;
+  reason?: 'cita_solapada' | 'permiso_bloqueo' | 'fuera_de_turno' | 'inactivo';
+  message?: string;
+  conflictingBooking?: Booking;
+  conflictingBlock?: EmployeeBlock;
+}
+
+/**
+ * Valida la disponibilidad inmediata de un colaborador específico
+ * para una fecha, hora de inicio y duración estimadas.
+ */
+export function checkEmployeeAvailability(params: {
+  employee: Employee;
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+  bookings: Booking[];
+  employeeBlocks: EmployeeBlock[];
+}): EmployeeAvailabilityResult {
+  const { employee, date, startTime, durationMinutes, bookings, employeeBlocks } = params;
+
+  if (!employee || !employee.active) {
+    return {
+      isAvailable: false,
+      reason: 'inactivo',
+      message: 'Colaborador no se encuentra activo',
+    };
+  }
+
+  const startMin = timeToMinutes(startTime);
+  const endMin = startMin + durationMinutes;
+
+  // 1. Validar turnos de trabajo
+  if (employee.shift_start && employee.shift_end) {
+    const shiftStartMin = timeToMinutes(employee.shift_start);
+    const shiftEndMin = timeToMinutes(employee.shift_end);
+    if (startMin < shiftStartMin || endMin > shiftEndMin) {
+      return {
+        isAvailable: false,
+        reason: 'fuera_de_turno',
+        message: `Fuera de turno (Horario: ${employee.shift_start} a ${employee.shift_end})`,
+      };
+    }
+  }
+
+  // 2. Validar permisos / ausencias
+  const blockConflict = (employeeBlocks || []).find((b) => {
+    if (b.employee_id !== employee.id) return false;
+    if (b.status && b.status !== 'aprobado' && b.status !== 'activo') return false;
+
+    const bDate = b.block_date || b.date || b.start_date;
+    const bEndDate = b.end_date || bDate;
+    const inDateRange =
+      bDate && bEndDate ? date >= bDate && date <= bEndDate : bDate === date;
+    if (!inDateRange) return false;
+
+    if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
+
+    const bStart = timeToMinutes(b.start_time || '00:00');
+    const bEnd = timeToMinutes(b.end_time || '23:59');
+    return startMin < bEnd && endMin > bStart;
+  });
+
+  if (blockConflict) {
+    return {
+      isAvailable: false,
+      reason: 'permiso_bloqueo',
+      message: `En permiso o ausencia (${blockConflict.reason || 'Horario bloqueado'})`,
+      conflictingBlock: blockConflict,
+    };
+  }
+
+  // 3. Validar citas agendadas que solapen
+  const bookingConflict = (bookings || []).find((b) => {
+    if (b.date !== date) return false;
+    if (b.status === 'cancelada' || b.status === 'expirada') return false;
+
+    const isMainAssigned = (b as any).assigned_employee_id === employee.id;
+    const matchingService = b.services?.find((s) => s.employee_id === employee.id);
+
+    if (!isMainAssigned && !matchingService) return false;
+
+    if (matchingService && (matchingService.hora_inicio || matchingService.start_time)) {
+      const sStart = timeToMinutes(
+        matchingService.hora_inicio || matchingService.start_time || b.start_time
+      );
+      const sEnd = timeToMinutes(
+        matchingService.hora_fin || matchingService.end_time || b.end_time
+      );
+      return startMin < sEnd && endMin > sStart;
+    }
+
+    const bStart = timeToMinutes(b.start_time);
+    const bEnd = timeToMinutes(b.end_time);
+    return startMin < bEnd && endMin > bStart;
+  });
+
+  if (bookingConflict) {
+    return {
+      isAvailable: false,
+      reason: 'cita_solapada',
+      message: `Cita ya reservada (${bookingConflict.code || 'Cita'}: ${bookingConflict.start_time} - ${bookingConflict.end_time})`,
+      conflictingBooking: bookingConflict,
+    };
+  }
+
+  return { isAvailable: true };
+}
+

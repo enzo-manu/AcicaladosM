@@ -29,6 +29,7 @@ import {
   PHONE_PLACEHOLDER,
   PHONE_ERROR_MESSAGE,
 } from '../../lib/validators';
+import { NewBookingModal } from './NewBookingModal';
 
 export const ReservasManager: React.FC = () => {
   const {
@@ -96,15 +97,6 @@ export const ReservasManager: React.FC = () => {
   const [tempAdvancePct, setTempAdvancePct] = useState<number>(paymentSettings.advance_percentage);
   const [tempYapePhone, setTempYapePhone] = useState<string>(paymentSettings.yape_phone);
   const [tempYapeHolder, setTempYapeHolder] = useState<string>(paymentSettings.yape_holder);
-
-  // New Booking Form State
-  const [newClientName, setNewClientName] = useState('');
-  const [newClientPhone, setNewClientPhone] = useState('');
-  const [newDate, setNewDate] = useState(getTodayDateString());
-  const [newStartTime, setNewStartTime] = useState('11:00');
-  const [newType, setNewType] = useState<'barberia' | 'spa' | 'mixto'>('barberia');
-  const [newSelectedServiceId, setNewSelectedServiceId] = useState<string>(services[0]?.id || '');
-  const [newEmployeeId, setNewEmployeeId] = useState<string>(employees[0]?.id || '');
 
   const todayStr = getTodayDateString();
 
@@ -272,75 +264,6 @@ export const ReservasManager: React.FC = () => {
       yape_holder: tempYapeHolder,
     });
     setIsSettingsModalOpen(false);
-  };
-
-  // Create Manual Booking
-  const handleCreateNewBooking = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClientName.trim()) {
-      alert('Por favor ingrese el nombre del cliente.');
-      return;
-    }
-    if (!isValidPhone(newClientPhone.trim())) {
-      alert(PHONE_ERROR_MESSAGE);
-      return;
-    }
-
-    const srv = (services || []).find((s) => s.id === newSelectedServiceId) || services?.[0];
-    const emp = (employees || []).find((e) => e.id === newEmployeeId) || employees?.[0];
-    if (!srv || !emp) return;
-
-    const [h, m] = newStartTime.split(':').map(Number);
-    const endMinutes = h * 60 + m + srv.duration_minutes;
-    const endH = Math.floor(endMinutes / 60);
-    const endM = endMinutes % 60;
-    const endTimeStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-
-    // Validar bloqueo por permiso / ausencia del colaborador
-    const isBlocked = (employeeBlocks || []).some((b) => {
-      if (b.employee_id !== emp.id) return false;
-      const bDate = b.block_date || b.date || b.start_date;
-      const bEndDate = b.end_date || bDate;
-      const inDate = bDate && bEndDate ? newDate >= bDate && newDate <= bEndDate : bDate === newDate;
-      if (!inDate) return false;
-      if (b.is_full_day || (!b.start_time && !b.end_time)) return true;
-      const bStart = b.start_time || '00:00';
-      const bEnd = b.end_time || '23:59';
-      return newStartTime < bEnd && endTimeStr > bStart;
-    });
-
-    if (isBlocked) {
-      alert(`No se puede programar la cita: El colaborador ${emp.full_name} tiene un permiso o ausencia registrada para esta fecha/horario.`);
-      return;
-    }
-
-    addBooking({
-      client_name: newClientName,
-      client_phone: newClientPhone,
-      client_email: 'recepcion@acicalados.pe',
-      date: newDate,
-      start_time: newStartTime,
-      end_time: endTimeStr,
-      type: newType,
-      services: [
-        {
-          service_id: srv.id,
-          service_name: srv.name,
-          employee_id: emp.id,
-          employee_name: emp.full_name,
-          price_cents: srv.price_cents,
-          duration_minutes: srv.duration_minutes,
-        },
-      ],
-      total_price_cents: srv.price_cents,
-      advance_amount_cents: 0,
-      status: 'pendiente',
-      payment_status: 'sin_pago',
-    });
-
-    setIsNewBookingModalOpen(false);
-    setNewClientName('');
-    setNewClientPhone('');
   };
 
   return (
@@ -1044,135 +967,10 @@ export const ReservasManager: React.FC = () => {
       )}
 
       {/* MODAL 4: Nueva Reserva Manual */}
-      {isNewBookingModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#141414] border border-[#C8A45C]/40 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
-              <h3 className="font-serif-luxury text-base font-bold text-white flex items-center gap-2">
-                <Plus className="w-4 h-4 text-[#C8A45C]" />
-                <span>Crear Cita Manual en Recepción</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsNewBookingModalOpen(false)}
-                className="text-neutral-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateNewBooking} className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="text-neutral-300">Cliente *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Nombre completo..."
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-neutral-300">Teléfono WhatsApp *</label>
-                  <span className="text-[10px] text-neutral-500 font-mono">9 dígitos</span>
-                </div>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  pattern="[0-9]{9}"
-                  maxLength={9}
-                  required
-                  placeholder={PHONE_PLACEHOLDER}
-                  value={newClientPhone}
-                  onKeyDown={handleNumericKeyDown}
-                  onChange={(e) => setNewClientPhone(sanitizePhone(e.target.value))}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-neutral-300">Fecha</label>
-                  <input
-                    type="date"
-                    required
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2 outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-neutral-300">Hora Inicio</label>
-                  <input
-                    type="time"
-                    required
-                    value={newStartTime}
-                    onChange={(e) => setNewStartTime(e.target.value)}
-                    className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-neutral-300">Servicio a Realizar</label>
-                <select
-                  value={newSelectedServiceId}
-                  onChange={(e) => setNewSelectedServiceId(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none"
-                >
-                  {services.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({formatSoles(s.price_cents)} - {s.duration_minutes} min)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-neutral-300">Especialista Asignado</label>
-                <select
-                  value={newEmployeeId}
-                  onChange={(e) => setNewEmployeeId(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none"
-                >
-                  {employees.filter((e) => e.active).map((emp) => {
-                    const isBlockedOnDate = (employeeBlocks || []).some((b) => {
-                      if (b.employee_id !== emp.id) return false;
-                      const bDate = b.block_date || b.date || b.start_date;
-                      const bEndDate = b.end_date || bDate;
-                      return bDate && bEndDate ? newDate >= bDate && newDate <= bEndDate : bDate === newDate;
-                    });
-                    return (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.type}) {isBlockedOnDate ? '⛔ [EN PERMISO/AUSENCIA]' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewBookingModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white bg-neutral-800"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl font-semibold bg-[#C8A45C] hover:bg-[#D4AF37] text-black shadow"
-                >
-                  Crear Cita
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <NewBookingModal
+        isOpen={isNewBookingModalOpen}
+        onClose={() => setIsNewBookingModalOpen(false)}
+      />
 
       {/* MODAL: Editar Reserva (Solo Administrador) */}
       {isEditModalOpen && selectedBookingForEdit && (

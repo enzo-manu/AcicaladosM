@@ -100,10 +100,11 @@ interface AppContextType {
   registerBookingPayment: (
     bookingId: string,
     amountCents: number,
-    method: 'yape' | 'efectivo' | 'mixto',
+    method: 'yape' | 'efectivo' | 'transferencia' | 'mixto' | string,
     cashCents?: number,
     yapeCents?: number,
-    voucherUrl?: string
+    voucherUrl?: string,
+    notes?: string
   ) => void;
   voidPayment: (paymentId: string, reason: string) => void;
   liberateServiceEarly: (bookingId: string, serviceIndex: number) => void;
@@ -834,6 +835,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               bookingData.payment_status ||
               (advanceAmount >= totalPrice ? 'total' : advanceAmount > 0 ? 'parcial' : 'sin_pago'),
             assigned_employee_id: safeEmployeeId,
+            payment_method: (bookingData as any).payment_method || null,
           })
           .select()
           .single();
@@ -881,6 +883,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await supabase.from('booking_services').insert(serviceRows);
           }
 
+          // Si se registró un pago de adelanto o total al crear la reserva, registrar en payment_logs
+          if (advanceAmount > 0) {
+            const pMethod = (bookingData as any).payment_method || 'efectivo';
+            const cashC = (bookingData as any).cash_cents || (pMethod === 'efectivo' ? advanceAmount : 0);
+            const yapeC = (bookingData as any).yape_cents || (pMethod === 'yape' ? advanceAmount : 0);
+            const pNotes = (bookingData as any).payment_notes || null;
+
+            await supabase.from('payment_logs').insert({
+              booking_id: insertedBooking.id,
+              amount_cents: advanceAmount,
+              payment_method: pMethod,
+              payment_type: advanceAmount >= totalPrice ? 'total' : 'advance',
+              cash_amount_cents: cashC,
+              yape_amount_cents: yapeC,
+              notes: pNotes,
+              status: 'verified',
+            });
+
+            const newLog: PaymentLog = {
+              id: `pay-${Date.now()}`,
+              booking_id: insertedBooking.id,
+              booking_code: insertedBooking.booking_code,
+              amount_cents: advanceAmount,
+              payment_method: pMethod,
+              cash_cents: cashC,
+              yape_cents: yapeC,
+              transfer_cents: (bookingData as any).transfer_cents || 0,
+              notes: pNotes,
+              created_at: `${today}T12:00:00Z`,
+              voided: false,
+            };
+            setPaymentLogs((prev) => [newLog, ...prev]);
+          }
+
           // Actualizar ID local al UUID de Supabase
           setBookings((prev) =>
             prev.map((b) =>
@@ -921,10 +957,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const registerBookingPayment = useCallback((
     bookingId: string,
     amountCents: number,
-    method: 'yape' | 'efectivo' | 'mixto',
+    method: 'yape' | 'efectivo' | 'transferencia' | 'mixto' | string,
     cashCents = 0,
     yapeCents = 0,
-    voucherUrl?: string
+    voucherUrl?: string,
+    notes?: string
   ) => {
     const today = getTodayDateString();
     setBookings((prev) => {
@@ -970,6 +1007,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cash_cents: cashCents,
       yape_cents: yapeCents,
       voucher_url: voucherUrl,
+      notes: notes,
       created_at: `${today}T12:00:00Z`,
       voided: false,
     };
@@ -985,6 +1023,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cash_amount_cents: cashCents,
         yape_amount_cents: yapeCents,
         proof_url: voucherUrl || null,
+        notes: notes || null,
         status: 'verified',
       }).then();
 
