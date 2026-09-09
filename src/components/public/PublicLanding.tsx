@@ -50,7 +50,7 @@ export const PublicLanding: React.FC = () => {
         {/* Subtle Background Glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-[#C8A45C]/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-4xl lg:max-w-5xl mx-auto text-center relative z-10 space-y-6">
+        <div className="w-full max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto text-center relative z-10 space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#181611] border border-[#C8A45C]/35 text-xs text-[#E6C875] font-medium shadow-sm">
             <Sparkles className="w-3.5 h-3.5 text-[#C8A45C]" />
             <span>Experiencia de Cuidado Personal & Estilo en Pichari</span>

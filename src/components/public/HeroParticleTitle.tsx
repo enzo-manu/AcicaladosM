@@ -176,10 +176,14 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
      */
     const getResponsiveSettings = (width: number): IResponsiveRenderSettings => {
       const isMobile = width < 768;
+      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
 
       if (isMobile) {
         const fontSize = Math.min(40, Math.max(31, Math.floor(width * 0.082)));
         const lineHeight = Math.floor(fontSize * 1.32);
+        // Altura generosa de 380px a 460px en móvil para permitir vuelo libre de partículas
+        const canvasHeight = Math.min(460, Math.max(380, Math.floor(viewportHeight * 0.46)));
+
         return {
           lines: [
             { text: 'El Arte del Buen Gusto,', isGold: false },
@@ -190,14 +194,16 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
           lineHeight,
           step: 3,
           particleSize: 1.6,
-          mouseRadius: 90, // Radio base en móvil (se expande hasta ~150px con swipe rápido)
-          canvasHeight: lineHeight * 3 + 70,
+          mouseRadius: 95, // Radio base en móvil (se expande con swipe rápido)
+          canvasHeight,
         };
       }
 
-      // Escritorio
+      // Escritorio (>= 768px): 54px a 68px con altura generosa de 480px a 580px
       const fontSize = Math.min(68, Math.max(54, Math.floor(width * 0.062)));
       const lineHeight = Math.floor(fontSize * 1.26);
+      const canvasHeight = Math.min(580, Math.max(480, Math.floor(viewportHeight * 0.54)));
+
       return {
         lines: [
           { text: 'El Arte del Buen Gusto,', isGold: false },
@@ -207,8 +213,8 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
         lineHeight,
         step: 2,
         particleSize: 1.35,
-        mouseRadius: 155, // Radio base en escritorio (se expande hasta ~255px en latigazos)
-        canvasHeight: lineHeight * 2 + 80,
+        mouseRadius: 160, // Radio base en escritorio (se expande ampliamente en latigazos)
+        canvasHeight,
       };
     };
 
@@ -517,7 +523,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full max-w-5xl mx-auto flex flex-col items-center justify-center min-h-[220px] sm:min-h-[260px] lg:min-h-[280px] overflow-hidden ${className}`}
+      className={`relative w-full flex flex-col items-center justify-center overflow-visible ${className}`}
     >
       {/* 
         H1 semántico oculto con sr-only para SEO y accesibilidad completa.
@@ -527,13 +533,14 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       </h1>
 
       {/* 
-        Canvas de partículas interactivo en Alta Definición.
+        Canvas de partículas interactivo en Alta Definición y Amplitud Total.
         - touchAction: 'pan-y' garantiza el scroll táctil vertical nativo.
+        - Sin cajas delimitadoras: las partículas vuelan con total libertad por la pantalla.
       */}
       <canvas
         ref={canvasRef}
         aria-hidden="true"
-        className="w-full block select-none cursor-crosshair transition-opacity duration-300"
+        className="w-full block select-none cursor-crosshair transition-opacity duration-300 overflow-visible"
         style={{ touchAction: 'pan-y' }}
       />
     </div>
