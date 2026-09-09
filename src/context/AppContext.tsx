@@ -18,6 +18,7 @@ import {
   BookingStatus,
   WardrobeStatus,
   LightboxData,
+  getBookingCollectedAmountCents,
 } from '../types';
 import {
   INITIAL_SERVICES,
@@ -2362,16 +2363,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const kpis = useMemo(() => {
     const today = getTodayDateString();
 
-    const confirmedBookings = bookings.filter(
-      (b) => b.status === 'confirmada' || b.status === 'completada'
+    const activeBookings = bookings.filter(
+      (b) => b.status !== 'cancelada' && b.status !== 'expirada'
     );
 
-    const ingresosServiciosCents = confirmedBookings.reduce(
-      (acc, b) => acc + (b.advance_amount_cents || 0),
+    // Suma únicamente reservas en estado PAGADO (100%) y adelantos percibidos en tiempo real
+    const ingresosServiciosCents = activeBookings.reduce(
+      (acc, b) => acc + getBookingCollectedAmountCents(b),
       0
     );
 
-    const ventasMostradorCents = ventasMostrador.reduce(
+    const activeVentas = ventasMostrador.filter((v: any) => !v.voided);
+    const ventasMostradorCents = activeVentas.reduce(
       (acc, v) => acc + (v.total_price_cents || 0),
       0
     );
@@ -2386,12 +2389,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const balanceNetoCents = totalIngresosCents - totalEgresosCents;
 
-    const citasHoy = bookings.filter((b) => b.date === today);
+    const citasHoy = bookings.filter(
+      (b) => b.date === today && b.status !== 'cancelada' && b.status !== 'expirada'
+    );
     const citasConfirmadas = bookings.filter((b) => b.status === 'confirmada');
 
-    const saldosPorCobrarCents = confirmedBookings.reduce((acc, b) => {
-      const saldo = b.total_price_cents - (b.advance_amount_cents || 0);
-      return acc + (saldo > 0 ? saldo : 0);
+    const saldosPorCobrarCents = activeBookings.reduce((acc, b) => {
+      const collected = getBookingCollectedAmountCents(b);
+      const saldo = Math.max(0, (b.total_price_cents || 0) - collected);
+      return acc + saldo;
     }, 0);
 
     return {

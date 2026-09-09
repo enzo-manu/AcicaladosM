@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatSoles } from '../../types';
+import { formatSoles, getBookingCollectedAmountCents, getBookingServicesWithCollectedCents } from '../../types';
 import { getTodayDateString } from '../../data/initialData';
 import { jsPDF } from 'jspdf';
 import {
@@ -62,9 +62,11 @@ export const ReportesView: React.FC = () => {
   };
 
   // 2. Cálculos y Métricas Reactivas para la Fecha Seleccionada
-  // Citas de la fecha (excluyendo canceladas)
+  // Citas de la fecha (excluyendo canceladas y expiradas)
   const dayBookings = useMemo(() => {
-    return bookings.filter((b) => b.date === selectedDate && b.status !== 'cancelada');
+    return bookings.filter(
+      (b) => b.date === selectedDate && b.status !== 'cancelada' && b.status !== 'expirada'
+    );
   }, [bookings, selectedDate]);
 
   // Total de Atenciones de la fecha (conteo de servicios agendados o citas completadas)
@@ -72,7 +74,7 @@ export const ReportesView: React.FC = () => {
     return dayBookings.reduce((acc, b) => acc + (b.services?.length || 1), 0);
   }, [dayBookings]);
 
-  // Ingresos por Barbería y por Spa
+  // Ingresos por Barbería y por Spa (Regla estricta: solo dinero real efectivamente cobrado)
   const { barberiaCents, spaCents, barberiaCount, spaCount } = useMemo(() => {
     let bCents = 0;
     let sCents = 0;
@@ -80,7 +82,8 @@ export const ReportesView: React.FC = () => {
     let sCount = 0;
 
     dayBookings.forEach((b) => {
-      b.services.forEach((srv) => {
+      const servicesWithCollected = getBookingServicesWithCollectedCents(b);
+      servicesWithCollected.forEach((srv) => {
         const catalogItem = services.find(
           (s) => s.id === srv.service_id || s.name === srv.service_name
         );
@@ -92,10 +95,10 @@ export const ReportesView: React.FC = () => {
           srv.service_name.toLowerCase().includes('exfolia');
 
         if (isSpa) {
-          sCents += srv.price_cents;
+          sCents += srv.collected_cents;
           sCount += 1;
         } else {
-          bCents += srv.price_cents;
+          bCents += srv.collected_cents;
           bCount += 1;
         }
       });
@@ -109,16 +112,17 @@ export const ReportesView: React.FC = () => {
     };
   }, [dayBookings, services]);
 
-  // Ingresos por Ventas de Mostrador en esa fecha
+  // Ingresos por Ventas de Mostrador en esa fecha (excluyendo anuladas)
   const dayVentas = useMemo(() => {
-    return ventasMostrador.filter((v) => {
+    return ventasMostrador.filter((v: any) => {
+      if (v.voided) return false;
       const vDate = v.created_at ? v.created_at.substring(0, 10) : '';
       return vDate === selectedDate;
     });
   }, [ventasMostrador, selectedDate]);
 
   const ventasCents = useMemo(() => {
-    return dayVentas.reduce((acc, v) => acc + v.total_price_cents, 0);
+    return dayVentas.reduce((acc, v) => acc + (v.total_price_cents || 0), 0);
   }, [dayVentas]);
 
   // Ingresos por Alquiler de Vestuario / Trajes
@@ -140,17 +144,17 @@ export const ReportesView: React.FC = () => {
     return dayExpenses.reduce((acc, e) => acc + e.amount_cents, 0);
   }, [dayExpenses]);
 
-  // Total Ingresos Cobrados
+  // Total Ingresos Cobrados (Recaudado real: Servicios cobrados + Ventas + Vestuario)
   const totalIngresosCents = useMemo(() => {
     return barberiaCents + spaCents + ventasCents + vestuarioCents;
   }, [barberiaCents, spaCents, ventasCents, vestuarioCents]);
 
-  // Ganancia Neta
+  // Ganancia Neta (Cálculo: Total Ingresos Cobrados - Total Egresos)
   const gananciaNetaCents = useMemo(() => {
     return totalIngresosCents - egresosCents;
   }, [totalIngresosCents, egresosCents]);
 
-  // 3. Top de Servicios Más Reservados del Día
+  // 3. Top de Servicios Más Reservados del Día (suma recaudación real por servicio)
   const topServices = useMemo(() => {
     const map = new Map<
       string,
@@ -158,7 +162,8 @@ export const ReportesView: React.FC = () => {
     >();
 
     dayBookings.forEach((b) => {
-      b.services.forEach((srv) => {
+      const servicesWithCollected = getBookingServicesWithCollectedCents(b);
+      servicesWithCollected.forEach((srv) => {
         const key = srv.service_name;
         const catalogItem = services.find(
           (s) => s.id === srv.service_id || s.name === srv.service_name
@@ -175,7 +180,7 @@ export const ReportesView: React.FC = () => {
           category: isSpa ? 'spa' : 'barberia',
         };
         existing.count += 1;
-        existing.totalCents += srv.price_cents;
+        existing.totalCents += srv.collected_cents;
         map.set(key, existing);
       });
     });
@@ -185,20 +190,25 @@ export const ReportesView: React.FC = () => {
     );
   }, [dayBookings, services]);
 
-  // Producción detallada por colaborador
+  // Producción detallada por colaborador (computa únicamente lo efectivamente cobrado)
   const specialistProduction = useMemo(() => {
+    const dayServicesWithCollected = dayBookings.flatMap((b) =>
+      getBookingServicesWithCollectedCents(b)
+    );
+
     return employees
       .filter((emp) => emp.active)
       .map((emp) => {
-        const empServices = dayBookings
-          .flatMap((b) => b.services)
-          .filter(
-            (srv) =>
-              srv.employee_id === emp.id ||
-              srv.employee_name?.toLowerCase() === emp.full_name?.toLowerCase()
-          );
+        const empServices = dayServicesWithCollected.filter(
+          (srv) =>
+            srv.employee_id === emp.id ||
+            srv.employee_name?.toLowerCase() === emp.full_name?.toLowerCase()
+        );
 
-        const totalCents = empServices.reduce((acc, s) => acc + s.price_cents, 0);
+        const totalCents = empServices.reduce(
+          (acc, s) => acc + (s.collected_cents || 0),
+          0
+        );
 
         return {
           id: emp.id,
@@ -523,7 +533,8 @@ Ganancia Neta: ${formatSolesText(gananciaNetaCents)}`;
     csvContent += 'Modulo,Fecha,Detalle,Monto Soles\n';
 
     dayBookings.forEach((b) => {
-      csvContent += `Reserva,${b.date},Cita #${b.code} - ${b.client_name},${(b.total_price_cents / 100).toFixed(2)}\n`;
+      const collected = getBookingCollectedAmountCents(b);
+      csvContent += `Reserva,${b.date},Cita #${b.code} - ${b.client_name},${(collected / 100).toFixed(2)}\n`;
     });
 
     dayVentas.forEach((v) => {

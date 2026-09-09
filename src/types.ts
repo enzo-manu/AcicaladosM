@@ -301,3 +301,83 @@ export interface LightboxData {
   price?: string;
   metadata?: string;
 }
+
+/**
+ * Regla estricta de cobranza real:
+ * - Si la cita está cancelada o expirada: S/ 0.00.
+ * - Si la cita está en estado "PAGADO" (payment_status === 'total', status === 'completada', o advance >= total):
+ *   Se suma el 100% del monto total de la cita.
+ * - Si la cita está registrada solo con adelanto (pago parcial):
+ *   Se suma ÚNICAMENTE el monto abonado del adelanto en tiempo real. El saldo restante por pagar queda totalmente excluido.
+ * - Si la cita está pendiente o no registra abono: Aporta S/ 0.00.
+ */
+export function getBookingCollectedAmountCents(b: Booking): number {
+  if (b.status === 'cancelada' || b.status === 'expirada') {
+    return 0;
+  }
+
+  const totalPrice = b.total_price_cents || 0;
+  const advance = b.advance_amount_cents || 0;
+
+  // Cita con cobro total concluido / 100% pagada
+  const isPaidTotal =
+    b.payment_status === 'total' ||
+    b.status === 'completada' ||
+    (advance > 0 && totalPrice > 0 && advance >= totalPrice);
+
+  if (isPaidTotal) {
+    return Math.max(totalPrice, advance);
+  }
+
+  // Cita con pago parcial (solo adelanto verificado)
+  if (advance > 0 || b.payment_status === 'parcial') {
+    return Math.min(advance, totalPrice > 0 ? totalPrice : advance);
+  }
+
+  // Pendiente o sin pago
+  return 0;
+}
+
+/**
+ * Prorratea el monto efectivamente cobrado de una cita entre sus servicios asignados.
+ * Garantiza que la suma de los servicios sea idéntica al total cobrado real.
+ */
+export function getBookingServicesWithCollectedCents(
+  b: Booking
+): Array<BookingServiceItem & { collected_cents: number }> {
+  const collectedTotal = getBookingCollectedAmountCents(b);
+  if (!b.services || b.services.length === 0) return [];
+
+  if (collectedTotal <= 0) {
+    return b.services.map((s) => ({ ...s, collected_cents: 0 }));
+  }
+
+  const totalPrice = b.total_price_cents || 0;
+  if (totalPrice <= 0) {
+    const perService = Math.round(collectedTotal / b.services.length);
+    return b.services.map((s, idx) => ({
+      ...s,
+      collected_cents:
+        idx === b.services.length - 1
+          ? Math.max(0, collectedTotal - perService * (b.services.length - 1))
+          : perService,
+    }));
+  }
+
+  if (collectedTotal >= totalPrice) {
+    return b.services.map((s) => ({ ...s, collected_cents: s.price_cents || 0 }));
+  }
+
+  // Prorrateo proporcional con ajuste en el último ítem
+  let accumulated = 0;
+  return b.services.map((s, idx) => {
+    if (idx === b.services.length - 1) {
+      const remainder = Math.max(0, collectedTotal - accumulated);
+      return { ...s, collected_cents: remainder };
+    }
+    const ratio = (s.price_cents || 0) / totalPrice;
+    const allocated = Math.round(collectedTotal * ratio);
+    accumulated += allocated;
+    return { ...s, collected_cents: allocated };
+  });
+}

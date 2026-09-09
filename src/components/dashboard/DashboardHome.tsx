@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatSoles, formatLimaDate, Booking } from '../../types';
+import { formatSoles, formatLimaDate, Booking, getBookingCollectedAmountCents } from '../../types';
 import { getTodayDateString } from '../../data/initialData';
 import {
   TrendingUp,
@@ -28,6 +28,78 @@ export const DashboardHome: React.FC = () => {
 
   const todayStr = getTodayDateString();
   const todayBookings = bookings.filter((b) => b.date === todayStr);
+
+  // Cálculo financiero estricto según rango seleccionado (Regla: solo dinero real cobrado)
+  const rangeKpis = useMemo(() => {
+    if (timeRange === 'todo') {
+      return {
+        totalIngresosCents: kpis.totalIngresosCents,
+        totalEgresosCents: kpis.totalEgresosCents,
+        balanceNetoCents: kpis.balanceNetoCents,
+        citasCount: bookings.filter((b) => b.status !== 'cancelada' && b.status !== 'expirada').length,
+        citasConfirmadasCount: bookings.filter((b) => b.status === 'confirmada').length,
+      };
+    }
+
+    let startDateStr = todayStr;
+    if (timeRange === 'semana') {
+      const d = new Date(todayStr + 'T12:00:00');
+      d.setDate(d.getDate() - 7);
+      startDateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    } else if (timeRange === 'mes') {
+      const d = new Date(todayStr + 'T12:00:00');
+      d.setDate(d.getDate() - 30);
+      startDateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+    }
+
+    const isInRange = (dateStr?: string) => {
+      if (!dateStr) return false;
+      const d = dateStr.substring(0, 10);
+      if (timeRange === 'hoy') return d === todayStr;
+      return d >= startDateStr && d <= todayStr;
+    };
+
+    // 1. Citas activas en rango (sólo 100% de pagadas y adelantos de activas)
+    const rangeBookings = bookings.filter(
+      (b) => b.status !== 'cancelada' && b.status !== 'expirada' && isInRange(b.date)
+    );
+    const ingresosServiciosCents = rangeBookings.reduce(
+      (acc, b) => acc + getBookingCollectedAmountCents(b),
+      0
+    );
+
+    // 2. Ventas de mostrador concluidas en rango
+    const rangeVentas = ventasMostrador.filter(
+      (v: any) => !v.voided && isInRange(v.created_at)
+    );
+    const ventasMostradorCents = rangeVentas.reduce(
+      (acc, v) => acc + (v.total_price_cents || 0),
+      0
+    );
+
+    const totalIngresosCents = ingresosServiciosCents + ventasMostradorCents;
+
+    // 3. Egresos operativos activos en rango
+    const rangeExpenses = expenses.filter(
+      (e) => !e.voided && isInRange(e.date || e.created_at)
+    );
+    const totalEgresosCents = rangeExpenses.reduce(
+      (acc, e) => acc + (e.amount_cents || 0),
+      0
+    );
+
+    const balanceNetoCents = totalIngresosCents - totalEgresosCents;
+    const citasCount = rangeBookings.length;
+    const citasConfirmadasCount = rangeBookings.filter((b) => b.status === 'confirmada').length;
+
+    return {
+      totalIngresosCents,
+      totalEgresosCents,
+      balanceNetoCents,
+      citasCount,
+      citasConfirmadasCount,
+    };
+  }, [timeRange, kpis, bookings, ventasMostrador, expenses, todayStr]);
 
   return (
     <div className="space-y-8 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -78,7 +150,7 @@ export const DashboardHome: React.FC = () => {
           </div>
           <div>
             <span className="font-serif-luxury text-2xl sm:text-3xl font-bold text-[#E6C875] tracking-tight block">
-              {formatSoles(kpis.totalIngresosCents)}
+              {formatSoles(rangeKpis.totalIngresosCents)}
             </span>
             <span className="text-[11px] text-neutral-500 mt-0.5 block">
               Solo cobros confirmados + POS
@@ -96,7 +168,7 @@ export const DashboardHome: React.FC = () => {
           </div>
           <div>
             <span className="font-serif-luxury text-2xl sm:text-3xl font-bold text-red-400 tracking-tight block">
-              {formatSoles(kpis.totalEgresosCents)}
+              {formatSoles(rangeKpis.totalEgresosCents)}
             </span>
             <span className="text-[11px] text-neutral-500 mt-0.5 block">
               Caja chica e insumos activos
@@ -110,12 +182,12 @@ export const DashboardHome: React.FC = () => {
             <span className="text-xs font-semibold text-neutral-400">Balance Neto de Caja</span>
             <div
               className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                kpis.balanceNetoCents >= 0
+                rangeKpis.balanceNetoCents >= 0
                   ? 'bg-emerald-950/40 text-emerald-400'
                   : 'bg-red-950/40 text-red-400'
               }`}
             >
-              {kpis.balanceNetoCents >= 0 ? (
+              {rangeKpis.balanceNetoCents >= 0 ? (
                 <ArrowUpRight className="w-4 h-4" />
               ) : (
                 <ArrowDownRight className="w-4 h-4" />
@@ -125,10 +197,10 @@ export const DashboardHome: React.FC = () => {
           <div>
             <span
               className={`font-serif-luxury text-2xl sm:text-3xl font-bold tracking-tight block ${
-                kpis.balanceNetoCents >= 0 ? 'text-emerald-400' : 'text-red-400'
+                rangeKpis.balanceNetoCents >= 0 ? 'text-emerald-400' : 'text-red-400'
               }`}
             >
-              {formatSoles(kpis.balanceNetoCents)}
+              {formatSoles(rangeKpis.balanceNetoCents)}
             </span>
             <span className="text-[11px] text-neutral-500 mt-0.5 block">
               Ingresos menos Egresos
@@ -139,17 +211,21 @@ export const DashboardHome: React.FC = () => {
         {/* 4. Citas de Hoy */}
         <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-5 space-y-3 shadow-xl relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-neutral-400">Citas Programadas Hoy</span>
+            <span className="text-xs font-semibold text-neutral-400">
+              {timeRange === 'hoy' ? 'Citas Programadas Hoy' : 'Citas en Periodo'}
+            </span>
             <div className="w-8 h-8 rounded-lg bg-blue-950/40 text-blue-400 flex items-center justify-center">
               <Calendar className="w-4 h-4" />
             </div>
           </div>
           <div>
             <span className="font-serif-luxury text-2xl sm:text-3xl font-bold text-white tracking-tight block">
-              {kpis.citasHoyCount} citas
+              {timeRange === 'hoy' ? `${kpis.citasHoyCount} citas` : `${rangeKpis.citasCount} citas`}
             </span>
             <span className="text-[11px] text-neutral-500 mt-0.5 block">
-              {kpis.citasConfirmadasCount} confirmadas con adelanto
+              {timeRange === 'hoy'
+                ? `${kpis.citasConfirmadasCount} confirmadas con adelanto`
+                : `${rangeKpis.citasConfirmadasCount} confirmadas con adelanto`}
             </span>
           </div>
         </div>
