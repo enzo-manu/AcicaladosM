@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../context/AppContext';
 import { 
   Search, 
@@ -14,6 +15,7 @@ import {
   Scissors,
   Sparkles,
   MapPin,
+  Menu,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -119,10 +121,22 @@ export const Navbar: React.FC = () => {
           item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
           item.desc.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : searchItems;
+    : [];
+  // Bloqueo de scroll de fondo al abrir menú móvil o buscador
+  useEffect(() => {
+    if (mobileMenuOpen || searchModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen, searchModalOpen]);
 
   return (
-    <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-[#C8A45C]/30 shadow-[0_4px_25px_rgba(0,0,0,0.85)] w-full">
+    <>
+      <header className="sticky top-0 z-40 bg-black/95 backdrop-blur-md border-b border-[#C8A45C]/30 shadow-[0_4px_25px_rgba(0,0,0,0.85)] w-full">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between w-full">
         
         {/* 1. LOGOTIPO (Extremo izquierdo) */}
@@ -330,37 +344,34 @@ export const Navbar: React.FC = () => {
 
           {/* Botón de Menú Hamburguesa (3 barras) */}
           <button
+            id="mobile-nav-toggle-btn"
             type="button"
-            onClick={() => setMobileMenuOpen(true)}
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
             className="lg:hidden p-1.5 sm:p-2 rounded-xl text-[#C8A45C] hover:text-[#EBDBB2] hover:bg-[#C8A45C]/15 border border-[#C8A45C]/35 transition-all flex items-center justify-center cursor-pointer shrink-0 focus:outline-none active:scale-95 ml-0.5 sm:ml-1"
-            title="Abrir Menú de Navegación"
-            aria-label="Abrir Menú de Navegación"
+            title={mobileMenuOpen ? 'Cerrar Menú de Navegación' : 'Abrir Menú de Navegación'}
+            aria-label={mobileMenuOpen ? 'Cerrar Menú de Navegación' : 'Abrir Menú de Navegación'}
+            aria-expanded={mobileMenuOpen}
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#C8A45C"
-              strokeWidth="2.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0"
-            >
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            {mobileMenuOpen ? (
+              <X className="w-5 h-5 text-[#C8A45C]" />
+            ) : (
+              <Menu className="w-5 h-5 text-[#C8A45C]" />
+            )}
           </button>
         </div>
       </div>
+    </header>
 
-      {/* MODAL DE BÚSQUEDA INTERACTIVA */}
-      {searchModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-start justify-center pt-20 px-4 animate-fadeIn"
-          onClick={() => setSearchModalOpen(false)}
-        >
+    {/* Portales Desplegables Montados en Document.body para Evitar Restricciones de Contenedores */}
+    {typeof document !== 'undefined' &&
+      createPortal(
+        <>
+          {/* MODAL DE BÚSQUEDA INTERACTIVA */}
+          {searchModalOpen && (
+            <div
+              className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-start justify-center pt-20 px-4 animate-fadeIn"
+              onClick={() => setSearchModalOpen(false)}
+            >
           <div
             className="w-full max-w-xl bg-[#111111] border border-[#C8A45C]/40 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -425,11 +436,11 @@ export const Navbar: React.FC = () => {
       {/* DRAWER RESPONSIVO COMPLETO PARA DISPOSITIVOS MÓVILES */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md transition-opacity duration-300 flex justify-end"
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md animate-fadeIn flex justify-end"
           onClick={() => setMobileMenuOpen(false)}
         >
           <div
-            className="w-[86vw] max-w-[340px] h-full bg-[#0E0E0E] border-l border-[#C8A45C]/35 shadow-[-20px_0_50px_rgba(0,0,0,0.95)] p-5 sm:p-6 flex flex-col justify-between overflow-y-auto"
+            className="w-[86vw] max-w-[340px] h-full bg-[#0E0E0E] border-l border-[#C8A45C]/35 shadow-[-20px_0_50px_rgba(0,0,0,0.95)] p-5 sm:p-6 flex flex-col justify-between overflow-y-auto animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top: Header with Brand & Close Button */}
@@ -634,6 +645,9 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
-    </header>
+    </>,
+    document.body
+  )}
+</>
   );
 };
