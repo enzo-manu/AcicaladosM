@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles, Product } from '../../types';
 import { ShoppingBag, Plus, Sparkles, Check, Search, Maximize2 } from 'lucide-react';
+import { CatalogCarousel } from '../common/CatalogCarousel';
 
 export const PublicShop: React.FC = () => {
   const { products, addToCart, setIsCartOpen, openLightbox } = useApp();
@@ -80,12 +81,15 @@ export const PublicShop: React.FC = () => {
         </div>
       </div>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Products 2-Row Horizontal Scroll Carousel */}
+      <CatalogCarousel
+        itemCount={filtered.length}
+        gridClassName="grid grid-rows-2 grid-flow-col auto-cols-[230px] sm:auto-cols-[260px] md:auto-cols-[280px] gap-5"
+      >
         {filtered.map((product) => (
           <div
             key={product.id}
-            className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between group transition duration-300"
+            className="h-full bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/40 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between group transition duration-300 select-none"
           >
             <div
               onClick={() =>
@@ -98,35 +102,36 @@ export const PublicShop: React.FC = () => {
                   metadata: `Stock: ${product.stock} un.`,
                 })
               }
-              className="relative h-48 bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
+              className="relative h-40 sm:h-44 bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
               title="Clic para ampliar imagen"
             >
               <img
                 src={product.image_url}
                 alt={product.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                draggable={false}
+                className="w-full h-full object-cover group-hover:scale-105 transition duration-500 pointer-events-none"
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
                     'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80';
                 }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
                 <span className="px-3 py-1.5 rounded-xl bg-black/80 border border-[#C8A45C]/60 text-[#E6C875] text-xs font-semibold flex items-center gap-1.5 shadow-lg backdrop-blur-sm">
                   <Maximize2 className="w-3.5 h-3.5" />
                   <span>Ver imagen</span>
                 </span>
               </div>
-              <div className="absolute top-2.5 right-2.5">
+              <div className="absolute top-2.5 right-2.5 pointer-events-none">
                 <span className="text-[10px] bg-black/75 backdrop-blur-sm text-neutral-300 px-2 py-0.5 rounded border border-neutral-800 font-medium">
                   Stock: {product.stock} un.
                 </span>
               </div>
             </div>
 
-            <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+            <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between space-y-3">
               <div className="space-y-1">
-                <h3 className="text-xs font-bold text-white group-hover:text-[#E6C875] transition line-clamp-2">
+                <h3 className="text-xs font-bold text-white group-hover:text-[#E6C875] transition line-clamp-1">
                   {product.name}
                 </h3>
                 <p className="text-[11px] text-neutral-400 line-clamp-2">
@@ -134,15 +139,15 @@ export const PublicShop: React.FC = () => {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-neutral-800/80 flex items-center justify-between">
-                <span className="text-sm font-bold text-[#E6C875]">
+              <div className="pt-2.5 border-t border-neutral-800/80 flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-bold text-[#E6C875]">
                   {formatSoles(product.price_cents)}
                 </span>
 
                 <button
                   type="button"
                   onClick={() => addToCart(product, 1)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#C8A45C] hover:bg-[#D4AF37] text-black transition flex items-center gap-1.5 shadow"
+                  className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#C8A45C] hover:bg-[#D4AF37] text-black transition flex items-center gap-1.5 shadow"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Añadir</span>
@@ -151,7 +156,7 @@ export const PublicShop: React.FC = () => {
             </div>
           </div>
         ))}
-      </div>
+      </CatalogCarousel>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatSoles, WardrobeItem } from '../../types';
 import { Shirt, MessageSquare, Sparkles, Shield, Tag, Calendar, Maximize2 } from 'lucide-react';
+import { CatalogCarousel } from '../common/CatalogCarousel';
 
 export const PublicWardrobe: React.FC = () => {
   const { wardrobe, openLightbox } = useApp();
@@ -82,7 +83,10 @@ export const PublicWardrobe: React.FC = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <CatalogCarousel
+          itemCount={filtered.length}
+          gridClassName="grid grid-rows-2 grid-flow-col auto-cols-[290px] sm:auto-cols-[330px] md:auto-cols-[360px] gap-6 sm:gap-7"
+        >
           {filtered.map((item) => {
             const codeDisplay = (item.code || 'A').toUpperCase().trim();
             const priceFormatted = (item.rental_price_cents / 100).toFixed(2);
@@ -90,34 +94,35 @@ export const PublicWardrobe: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/50 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between group transition duration-300 hover:shadow-2xl hover:shadow-[#C8A45C]/5"
+                className="h-full bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/50 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between group transition duration-300 hover:shadow-2xl hover:shadow-[#C8A45C]/5 select-none"
               >
                 {/* Imagen y Badges */}
                 <div
-              onClick={() =>
-                openLightbox({
-                  url: item.image_url,
-                  title: item.name,
-                  description: item.description,
-                  category: item.category,
-                  code: `Código: ${codeDisplay}`,
-                  price: `Alquiler: S/ ${priceFormatted}`,
-                  metadata: `Talla: ${item.size || 'Ajustable'}${item.deposit_cents ? ` · Garantía: ${formatSoles(item.deposit_cents)}` : ''}`,
-                })
-              }
-              className="relative aspect-[4/3] bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
-              title="Clic para ampliar imagen"
-            >
-              <img
-                src={item.image_url}
-                alt={item.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80';
-                }}
-              />
+                  onClick={() =>
+                    openLightbox({
+                      url: item.image_url,
+                      title: item.name,
+                      description: item.description,
+                      category: item.category,
+                      code: `Código: ${codeDisplay}`,
+                      price: `Alquiler: S/ ${priceFormatted}`,
+                      metadata: `Talla: ${item.size || 'Ajustable'}${item.deposit_cents ? ` · Garantía: ${formatSoles(item.deposit_cents)}` : ''}`,
+                    })
+                  }
+                  className="relative aspect-[4/3] bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
+                  title="Clic para ampliar imagen"
+                >
+                  <img
+                    src={item.image_url}
+                    alt={item.name}
+                    draggable={false}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500 pointer-events-none"
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80';
+                    }}
+                  />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
 
               {/* Indicador de Zoom al Hover */}
@@ -199,7 +204,7 @@ export const PublicWardrobe: React.FC = () => {
               </div>
             );
           })}
-        </div>
+        </CatalogCarousel>
       )}
     </div>
   );
