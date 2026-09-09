@@ -16,7 +16,6 @@ import {
   FileText,
   ArrowRight,
   ArrowLeft,
-  Printer,
   ShieldCheck,
   Check,
   AlertCircle,
@@ -46,7 +45,6 @@ export const PublicBookingFlow: React.FC = () => {
     employeeBlocks,
     bookings,
     addBooking,
-    openTicketModal,
     currentUser,
     currentRole,
     setActiveView,
@@ -851,30 +849,17 @@ export const PublicBookingFlow: React.FC = () => {
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
           {/* Booking Confirmation Card */}
           <div className="bg-[#141414] border border-[#C8A45C]/40 rounded-2xl p-6 sm:p-8 space-y-6 shadow-2xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400">
-                    ¡Reserva Registrada Exitosamente!
-                  </span>
-                  <h3 className="font-serif-luxury text-xl font-bold text-white">
-                    Código de Cita: #{createdBooking.code}
-                  </h3>
-                </div>
+            <div className="flex items-center gap-3 border-b border-neutral-800 pb-5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <CheckCircle2 className="w-6 h-6" />
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openTicketModal('booking', createdBooking)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#1F1F1F] hover:bg-[#252525] text-[#E6C875] border border-[#C8A45C]/30 flex items-center gap-1.5 transition"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Ver Ticket Térmico</span>
-                </button>
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400">
+                  ¡Reserva Registrada Exitosamente!
+                </span>
+                <h3 className="font-serif-luxury text-xl font-bold text-white">
+                  Código de Cita: #{createdBooking.code}
+                </h3>
               </div>
             </div>
 
