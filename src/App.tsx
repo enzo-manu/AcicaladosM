@@ -35,6 +35,7 @@ import { MapPin, Phone, ShieldCheck, Scissors } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const { activeView, setActiveView, currentRole } = useApp();
+  const mainContentRef = React.useRef<HTMLElement>(null);
 
   const isDashboard = activeView.startsWith('/dashboard');
   const isAuthView = activeView === '/auth/login' || activeView === '/auth/callback';
@@ -49,8 +50,19 @@ const AppContent: React.FC = () => {
     }
   }, [isDashboard, isPublicRole, setActiveView]);
 
+  // Reset scroll to top when changing dashboard views
+  React.useEffect(() => {
+    if (isDashboard && mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [activeView, isDashboard]);
+
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full overflow-x-hidden">
+    <div
+      className={`bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full ${
+        isDashboard ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen overflow-x-hidden'
+      }`}
+    >
       {/* Global Thermal Ticket Modal */}
       <TicketTermicoModal />
 
@@ -71,9 +83,12 @@ const AppContent: React.FC = () => {
         </div>
       ) : isDashboard ? (
         // DASHBOARD LAYOUT
-        <div className="flex-1 flex flex-col md:flex-row min-h-screen">
+        <div className="flex-1 flex flex-col lg:flex-row h-full max-h-full overflow-hidden">
           <AdminSidebar />
-          <main className="flex-1 overflow-y-auto pb-12 bg-neutral-950/70">
+          <main
+            ref={mainContentRef}
+            className="flex-1 h-full min-w-0 overflow-y-auto overflow-x-hidden pb-12 bg-neutral-950/70"
+          >
             {isPublicRole ? (
               <div className="max-w-md mx-auto my-20 p-6 rounded-2xl bg-[#141414] border border-red-900/40 text-center space-y-4 shadow-2xl">
                 <div className="w-12 h-12 rounded-full bg-red-950/40 border border-red-800/60 text-red-400 flex items-center justify-center mx-auto">

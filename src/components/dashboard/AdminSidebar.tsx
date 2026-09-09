@@ -99,7 +99,7 @@ export const AdminSidebar: React.FC = () => {
   return (
     <>
       {/* Mobile Top Bar for Dashboard View */}
-      <div className="lg:hidden flex items-center justify-between p-3.5 bg-[#0E0E0E] border-b border-[#C8A45C]/20 sticky top-0 z-30">
+      <div className="lg:hidden flex items-center justify-between p-3.5 bg-[#0E0E0E] border-b border-[#C8A45C]/20 shrink-0">
         <div className="flex items-center gap-2.5">
           <button
             type="button"
@@ -136,7 +136,7 @@ export const AdminSidebar: React.FC = () => {
 
       {/* Main Sidebar (Desktop fixed 260px, Mobile drawer) */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-[260px] bg-[#0E0E0E] border-r border-[#C8A45C]/20 flex flex-col justify-between transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.85)] ${
+        className={`fixed lg:relative top-0 left-0 z-50 lg:z-30 h-screen lg:h-full w-[260px] shrink-0 bg-[#0E0E0E] border-r border-[#C8A45C]/20 flex flex-col justify-between transition-transform duration-300 shadow-[4px_0_24px_rgba(0,0,0,0.85)] ${
           mobileDrawerOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
