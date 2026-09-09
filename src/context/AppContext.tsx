@@ -2018,7 +2018,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const insertPayload = {
         name: srvData.name,
         slug: slug,
-        description: srvData.description,
+        description: srvData.description?.trim() || null,
         type: srvData.category,
         price_cents: srvData.price_cents,
         currency: 'PEN',
@@ -2039,7 +2039,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (error) {
         console.error('Error al insertar servicio en Supabase:', error);
         // Fallback local
-        const newSrv: Service = { ...srvData, id: `srv-${Date.now()}` };
+        const newSrv: Service = { ...srvData, description: srvData.description?.trim() || '', id: `srv-${Date.now()}` };
         setServices((prev) => [...prev, newSrv]);
         pulseRealtime();
         return true;
@@ -2071,7 +2071,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateService = useCallback(async (srv: Service): Promise<boolean> => {
     try {
-      setServices((prev) => prev.map((s) => (s.id === srv.id ? srv : s)));
+      const sanitizedSrv: Service = {
+        ...srv,
+        description: srv.description?.trim() || '',
+      };
+      setServices((prev) => prev.map((s) => (s.id === srv.id ? sanitizedSrv : s)));
       pulseRealtime();
 
       if (srv.id.includes('-') && srv.id.length === 36) {
@@ -2081,7 +2085,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           type: srv.category,
           price_cents: srv.price_cents,
           duration_minutes: srv.duration_minutes,
-          description: srv.description,
+          description: srv.description?.trim() || null,
           is_active: srv.active,
           is_public: srv.active,
           images: srv.image_url ? [srv.image_url] : [],

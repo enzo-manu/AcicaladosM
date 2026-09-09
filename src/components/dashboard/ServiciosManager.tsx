@@ -479,10 +479,6 @@ export const ServiciosManager: React.FC = () => {
       showToast('error', 'El nombre o título del servicio es obligatorio.');
       return;
     }
-    if (!formDescription.trim()) {
-      showToast('error', 'La descripción del servicio es obligatoria.');
-      return;
-    }
     const priceNum = parseFloat(formPriceSoles);
     if (isNaN(priceNum) || priceNum < 0) {
       showToast('error', 'Ingresa un precio válido en Soles (S/).');
@@ -1152,13 +1148,16 @@ export const ServiciosManager: React.FC = () => {
 
               {/* 4. Descripción */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-300 block">
-                  Descripción Detallada <span className="text-[#C8A45C]">*</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="service-form-description" className="text-xs font-semibold text-neutral-300 block">
+                    Descripción Detallada
+                  </label>
+                  <span className="text-[10px] text-neutral-500 font-normal">Opcional</span>
+                </div>
                 <textarea
-                  required
+                  id="service-form-description"
                   rows={2}
-                  placeholder="Describe los beneficios, pasos del procedimiento y productos utilizados..."
+                  placeholder="Describe los beneficios, pasos del procedimiento y productos utilizados (opcional)..."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
                   className="w-full bg-[#181818] border border-neutral-700/80 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-[#C8A45C] transition-colors resize-none"

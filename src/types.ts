@@ -19,7 +19,7 @@ export interface Service {
   capacity: number;
   active: boolean;
   image_url: string;
-  description: string;
+  description?: string;
 }
 
 export interface Product {
