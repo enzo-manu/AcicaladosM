@@ -4,7 +4,6 @@ import {
   Navigation,
   Compass,
   Phone,
-  MessageSquare,
   Clock,
   Star,
   Copy,
@@ -76,8 +75,8 @@ export const PublicLocation: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-10 animate-in fade-in duration-300">
       {/* Page Header */}
       <div className="text-center space-y-3 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#C8A45C]/15 border border-[#C8A45C]/35 text-[#E6C875] text-xs font-bold tracking-widest uppercase">
-          <Sparkles className="w-3.5 h-3.5 text-[#E6C875]" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C8A45C]/15 border border-[#C8A45C]/35 text-[#E6C875] text-xs font-bold tracking-widest uppercase shadow-sm">
+          <img src="/icons/maps.svg" alt="Maps" className="w-4 h-4 object-contain" />
           <span>Sede Oficial & Encuéntranos</span>
         </div>
         <h1 className="font-serif-luxury text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-wide">
@@ -143,9 +142,9 @@ export const PublicLocation: React.FC = () => {
               {/* Establishment Details */}
               <div className="space-y-4 text-xs">
                 {/* Address */}
-                <div className="flex items-start gap-3.5">
-                  <div className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/30 text-[#E6C875] flex items-center justify-center shrink-0 shadow-sm">
-                    <MapPin className="w-4 h-4" />
+                <div className="flex items-start gap-3.5 group">
+                  <div className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/30 text-[#E6C875] flex items-center justify-center shrink-0 shadow-sm transition-all duration-300 group-hover:border-[#C8A45C]/60 group-hover:shadow-[0_0_12px_rgba(200,164,92,0.25)]">
+                    <img src="/icons/maps.svg" alt="Google Maps" className="w-5 h-5 object-contain transition-transform duration-300 group-hover:scale-110" />
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-neutral-400 font-semibold block text-[11px] uppercase tracking-wider">
@@ -256,11 +255,15 @@ export const PublicLocation: React.FC = () => {
                 href={googleMapsDirectUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#D4AF37] via-[#E6C875] to-[#C8A45C] hover:brightness-110 text-black font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-[#C8A45C]/20 transition transform active:scale-[0.98]"
+                className="group w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-[#D4AF37] via-[#E6C875] to-[#C8A45C] hover:brightness-110 text-black font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-[#C8A45C]/20 transition transform active:scale-[0.98]"
               >
-                <Compass className="w-4 h-4 text-black animate-spin-slow" />
+                <img
+                  src="/icons/maps.svg"
+                  alt="Google Maps"
+                  className="w-5 h-5 object-contain transition-transform duration-300 group-hover:scale-115 group-hover:rotate-6"
+                />
                 <span>Cómo llegar / Abrir en Google Maps</span>
-                <ExternalLink className="w-4 h-4 text-black/80" />
+                <ExternalLink className="w-4 h-4 text-black/80 transition-transform duration-300 group-hover:translate-x-0.5" />
               </a>
 
               {/* Direct WhatsApp Quick Chat */}
@@ -268,9 +271,13 @@ export const PublicLocation: React.FC = () => {
                 href={`https://wa.me/51${whatsappNumber}?text=Hola%20Spa%20Acicalados%20Barber%20Shop,%20quisiera%20consultar%20sobre%20su%20ubicaci%C3%B3n%20y%20disponibilidad%20de%20citas`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 px-4 rounded-2xl bg-[#181818] hover:bg-neutral-800 border border-neutral-800 hover:border-emerald-600/50 text-neutral-200 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 transition shadow"
+                className="group w-full py-3 px-4 rounded-2xl bg-[#181818] hover:bg-neutral-800 border border-neutral-800 hover:border-emerald-600/50 text-neutral-200 hover:text-white font-semibold text-xs flex items-center justify-center gap-2.5 transition shadow"
               >
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
+                <img
+                  src="/icons/whatsApp.svg"
+                  alt="WhatsApp"
+                  className="w-4 h-4 object-contain transition-transform duration-300 group-hover:scale-115"
+                />
                 <span>Chatear por WhatsApp con Recepción</span>
               </a>
             </div>
@@ -299,8 +306,13 @@ export const PublicLocation: React.FC = () => {
                   href={googleMapsDirectUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-[#C8A45C] text-neutral-300 hover:text-black border border-neutral-800 text-[11px] font-semibold transition flex items-center gap-1"
+                  className="group px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-[#C8A45C] text-neutral-300 hover:text-black border border-neutral-800 text-[11px] font-semibold transition flex items-center gap-1.5"
                 >
+                  <img
+                    src="/icons/maps.svg"
+                    alt="Maps"
+                    className="w-3.5 h-3.5 object-contain transition-transform group-hover:scale-110"
+                  />
                   <span>Pantalla Completa</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>

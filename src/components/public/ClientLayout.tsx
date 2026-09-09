@@ -130,6 +130,104 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
             </div>
           </div>
 
+          {/* Barra Centralizada de Redes Sociales Oficiales */}
+          <div className="pt-8 border-t border-neutral-900/80 flex flex-col items-center justify-center gap-3.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#C8A45C]">
+              Síguenos en Redes Sociales
+            </span>
+            <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
+              <a
+                href="https://facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook Oficial de Acicalados"
+                className="group relative p-2.5 sm:p-3 rounded-2xl bg-neutral-950/80 hover:bg-[#1A1815] border border-neutral-800/90 hover:border-[#C8A45C]/70 transition-all duration-300 transform hover:scale-110 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(200,164,92,0.35)] flex items-center justify-center"
+              >
+                <img
+                  src="/icons/Facebook.svg"
+                  alt="Facebook"
+                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain transition-all duration-300 group-hover:brightness-110"
+                  loading="lazy"
+                />
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-semibold tracking-wider text-[#E6C875] bg-black/95 px-2 py-0.5 rounded-md border border-[#C8A45C]/40 shadow-xl whitespace-nowrap z-20">
+                  Facebook
+                </span>
+              </a>
+
+              <a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram Oficial de Acicalados"
+                className="group relative p-2.5 sm:p-3 rounded-2xl bg-neutral-950/80 hover:bg-[#1A1815] border border-neutral-800/90 hover:border-[#C8A45C]/70 transition-all duration-300 transform hover:scale-110 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(200,164,92,0.35)] flex items-center justify-center"
+              >
+                <img
+                  src="/icons/Instagram.svg"
+                  alt="Instagram"
+                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain transition-all duration-300 group-hover:brightness-110"
+                  loading="lazy"
+                />
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-semibold tracking-wider text-[#E6C875] bg-black/95 px-2 py-0.5 rounded-md border border-[#C8A45C]/40 shadow-xl whitespace-nowrap z-20">
+                  Instagram
+                </span>
+              </a>
+
+              <a
+                href="https://tiktok.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="TikTok Oficial de Acicalados"
+                className="group relative p-2.5 sm:p-3 rounded-2xl bg-neutral-950/80 hover:bg-[#1A1815] border border-neutral-800/90 hover:border-[#C8A45C]/70 transition-all duration-300 transform hover:scale-110 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(200,164,92,0.35)] flex items-center justify-center"
+              >
+                <img
+                  src="/icons/Tiktok.svg"
+                  alt="TikTok"
+                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain transition-all duration-300 group-hover:brightness-110"
+                  loading="lazy"
+                />
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-semibold tracking-wider text-[#E6C875] bg-black/95 px-2 py-0.5 rounded-md border border-[#C8A45C]/40 shadow-xl whitespace-nowrap z-20">
+                  TikTok
+                </span>
+              </a>
+
+              <a
+                href="https://wa.me/51987654321?text=Hola%20Spa%20Acicalados%20Barber%20Shop,%20quisiera%20consultar%20sobre%20sus%20servicios%20y%20citas"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp Oficial de Acicalados"
+                className="group relative p-2.5 sm:p-3 rounded-2xl bg-neutral-950/80 hover:bg-[#1A1815] border border-neutral-800/90 hover:border-[#C8A45C]/70 transition-all duration-300 transform hover:scale-110 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(200,164,92,0.35)] flex items-center justify-center"
+              >
+                <img
+                  src="/icons/whatsApp.svg"
+                  alt="WhatsApp"
+                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain transition-all duration-300 group-hover:brightness-110"
+                  loading="lazy"
+                />
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-semibold tracking-wider text-[#E6C875] bg-black/95 px-2 py-0.5 rounded-md border border-[#C8A45C]/40 shadow-xl whitespace-nowrap z-20">
+                  WhatsApp
+                </span>
+              </a>
+
+              <a
+                href="https://youtube.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="YouTube Oficial de Acicalados"
+                className="group relative p-2.5 sm:p-3 rounded-2xl bg-neutral-950/80 hover:bg-[#1A1815] border border-neutral-800/90 hover:border-[#C8A45C]/70 transition-all duration-300 transform hover:scale-110 hover:-translate-y-0.5 hover:shadow-[0_0_20px_rgba(200,164,92,0.35)] flex items-center justify-center"
+              >
+                <img
+                  src="/icons/Youtube.svg"
+                  alt="YouTube"
+                  className="w-6 h-6 sm:w-7 sm:h-7 object-contain transition-all duration-300 group-hover:brightness-110"
+                  loading="lazy"
+                />
+                <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[10px] font-semibold tracking-wider text-[#E6C875] bg-black/95 px-2 py-0.5 rounded-md border border-[#C8A45C]/40 shadow-xl whitespace-nowrap z-20">
+                  YouTube
+                </span>
+              </a>
+            </div>
+          </div>
+
           <div className="pt-6 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-neutral-500">
             <span>© {new Date().getFullYear()} Acicalados Spa &amp; Barber Shop. RUC 20608912341. Todos los derechos reservados.</span>
             <span className="flex items-center gap-1.5 text-neutral-400">
