@@ -46,7 +46,7 @@ export const PublicLanding: React.FC = () => {
   return (
     <div className="space-y-16 pb-20 w-full max-w-full overflow-x-hidden">
       {/* Hero Section */}
-      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-20 bg-gradient-to-b from-[#0F0E0C] via-[#0A0A0A] to-[#0A0A0A] border-b border-[#C8A45C]/15">
+      <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden px-4 sm:px-6 lg:px-8 py-20 bg-gradient-to-b from-black/40 via-transparent to-black/60 border-b border-[#C8A45C]/15">
         {/* Subtle Background Glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-[#C8A45C]/10 rounded-full blur-3xl pointer-events-none" />
 

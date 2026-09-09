@@ -14,6 +14,7 @@ import { PublicShop } from './components/public/PublicShop';
 import { PublicWardrobe } from './components/public/PublicWardrobe';
 import { PublicLocation } from './components/public/PublicLocation';
 import { ClientPortal } from './components/public/ClientPortal';
+import { ClientLayout } from './components/public/ClientLayout';
 
 // Auth views
 import { LoginView } from './components/auth/LoginView';
@@ -59,8 +60,8 @@ const AppContent: React.FC = () => {
 
   return (
     <div
-      className={`bg-[#0A0A0A] text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full ${
-        isDashboard ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen overflow-x-hidden'
+      className={`text-neutral-200 flex flex-col font-sans selection:bg-[#C8A45C] selection:text-black w-full max-w-full ${
+        isDashboard ? 'bg-[#0A0A0A] h-screen max-h-screen overflow-hidden' : 'bg-transparent min-h-screen overflow-x-hidden'
       }`}
     >
       {/* Global Thermal Ticket Modal */}
@@ -126,92 +127,16 @@ const AppContent: React.FC = () => {
           </main>
         </div>
       ) : (
-        // PUBLIC LAYOUT
-        <div className="flex-1 flex flex-col w-full max-w-full overflow-x-hidden">
-          <Navbar />
-          <main className="flex-1">
-            {activeView === '/' && <PublicLanding />}
-            {activeView === '/servicios' && <PublicServices />}
-            {activeView === '/reservar' && <PublicBookingFlow />}
-            {(activeView === '/tienda' || activeView === '/productos') && <PublicShop />}
-            {activeView === '/vestuario' && <PublicWardrobe />}
-            {activeView === '/ubicacion' && <PublicLocation />}
-            {activeView === '/mi-cuenta' && <ClientPortal />}
-          </main>
-
-          {/* Public Footer */}
-          <footer className="bg-[#0D0D0D] border-t border-neutral-900 mt-20 pt-12 pb-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                {/* Brand */}
-                <div className="space-y-3 md:col-span-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#C8A45C] text-black flex items-center justify-center">
-                      <Scissors className="w-4 h-4" />
-                    </div>
-                    <span className="font-serif-luxury font-bold text-lg text-white">
-                      ACICALADOS <span className="text-[#C8A45C]">SPA & BARBER</span>
-                    </span>
-                  </div>
-                  <p className="text-xs text-neutral-400 max-w-sm leading-relaxed">
-                    Club exclusivo de cuidado personal masculino y estética integral en Pichari, Cusco. Experiencia multisensorial con bebidas de cortesía y especialistas de primer nivel.
-                  </p>
-                </div>
-
-                {/* Quick Links */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">Navegación</h4>
-                  <ul className="space-y-1.5 text-xs text-neutral-400">
-                    <li>
-                      <button onClick={() => setActiveView('/servicios')} className="hover:text-[#C8A45C]">
-                        Menú de Servicios
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => setActiveView('/reservar')} className="hover:text-[#C8A45C]">
-                        Reservar Turno Online
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => setActiveView('/tienda')} className="hover:text-[#C8A45C]">
-                        Tienda Profesional
-                      </button>
-                    </li>
-                    <li>
-                      <button onClick={() => setActiveView('/vestuario')} className="hover:text-[#C8A45C]">
-                        Alquiler de Trajes
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Contact & Hours */}
-                <div className="space-y-2 text-xs text-neutral-400">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-white">Sede Pichari</h4>
-                  <p className="flex items-center gap-1.5 text-neutral-300">
-                    <MapPin className="w-3.5 h-3.5 text-[#C8A45C]" />
-                    <span>Av. Arriba Perú Mz. K - Lt. 9, Pichari</span>
-                  </p>
-                  <p className="flex items-center gap-1.5 text-neutral-300">
-                    <Phone className="w-3.5 h-3.5 text-[#C8A45C]" />
-                    <span>+51 987 654 321</span>
-                  </p>
-                  <p className="text-[11px] text-neutral-500 pt-1">
-                    Horario: Lun - Sáb 08:30 a 21:00 hrs. Dom 09:30 a 20:00 hrs.
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-6 border-t border-neutral-900 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-neutral-500">
-                <span>© {new Date().getFullYear()} Acicalados Spa & Barber Shop. RUC 20608912341. Todos los derechos reservados.</span>
-                <span className="flex items-center gap-1.5 text-neutral-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Pagos seguros vía Yape Perú & Verificación Inmediata</span>
-                </span>
-              </div>
-            </div>
-          </footer>
-        </div>
+        // PUBLIC PORTAL LAYOUT (CON VIDEO DE FONDO PERSISTENTE)
+        <ClientLayout>
+          {activeView === '/' && <PublicLanding />}
+          {activeView === '/servicios' && <PublicServices />}
+          {activeView === '/reservar' && <PublicBookingFlow />}
+          {(activeView === '/tienda' || activeView === '/productos') && <PublicShop />}
+          {activeView === '/vestuario' && <PublicWardrobe />}
+          {activeView === '/ubicacion' && <PublicLocation />}
+          {activeView === '/mi-cuenta' && <ClientPortal />}
+        </ClientLayout>
       )}
     </div>
   );
