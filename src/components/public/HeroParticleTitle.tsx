@@ -6,11 +6,17 @@ import React, { useEffect, useRef } from 'react';
  * ==============================================================================
  */
 
-/** Estado y coordenadas de interacción del cursor / touch */
+/** Estado y dinámica de interacción del cursor / touch */
 export interface IMouseState {
   x: number | null;
   y: number | null;
-  radius: number;
+  prevX: number | null;
+  prevY: number | null;
+  speed: number;          // Velocidad instantánea en px/ms
+  smoothedSpeed: number;  // Velocidad suavizada con inercia para onda expansiva
+  radius: number;         // Radio dinámico actual expandido por velocidad
+  baseRadius: number;     // Radio base configurado según viewport
+  forceFactor: number;    // Multiplicador de impacto dinámico
   isActive: boolean;
 }
 
@@ -47,9 +53,9 @@ export interface IResponsiveRenderSettings {
 
 /**
  * Clase Particle:
- * Modela la física de cada partícula individual:
- * - Repulsión elástica ante proximidad del cursor o toque táctil
- * - Resorte armónico amortiguado (Spring-Damping) hacia su posición base (baseX, baseY)
+ * Modela la física balística y armónica de cada partícula:
+ * - Repulsión por onda de choque proporcional a la velocidad del puntero
+ * - Resorte armónico amortiguado (Spring-Damping) con fricción suave para retorno elástico y fluido
  */
 class Particle implements IParticle {
   x: number;
@@ -70,12 +76,12 @@ class Particle implements IParticle {
     this.y = baseY + (Math.random() - 0.5) * 22;
     this.size = size;
     this.isGold = isGold;
-    // Masa e inercia dinámica para dar variación natural a la onda de choque
-    this.density = Math.random() * 16 + 10;
+    // Variación dinámica de masa / resistencia al impacto
+    this.density = Math.random() * 16 + 12;
   }
 
   update(mouse: IMouseState): void {
-    // 1. Repulsión física ante cursor / touch activo
+    // 1. Repulsión balística y onda expansiva ante el cursor/touch
     if (mouse.isActive && mouse.x !== null && mouse.y !== null) {
       const dx = mouse.x - this.x;
       const dy = mouse.y - this.y;
@@ -84,18 +90,25 @@ class Particle implements IParticle {
       if (distance < mouse.radius && distance > 0.001) {
         const forceDirectionX = dx / distance;
         const forceDirectionY = dy / distance;
-        // Caída cuadrática suave: máxima repulsión al centro, 0 en el borde del radio
-        const force = (mouse.radius - distance) / mouse.radius;
-        const impulse = force * this.density * 0.44;
+
+        // Caída de fuerza no-lineal: potente en el epicentro y suave hacia el perímetro
+        const normalizedDist = (mouse.radius - distance) / mouse.radius;
+        const powerCurve = Math.pow(normalizedDist, 1.15);
+
+        // Fuerza base + multiplicador dinámico escalado por la velocidad del cursor (shockwave)
+        const baseForce = 1.35;
+        const impulse = powerCurve * this.density * baseForce * mouse.forceFactor;
 
         this.vx -= forceDirectionX * impulse;
         this.vy -= forceDirectionY * impulse;
       }
     }
 
-    // 2. Física de resorte (Hooke's Law + amortiguamiento) hacia el origen
-    const spring = 0.08;
-    const friction = 0.85;
+    // 2. Retorno elástico orgánico (Spring-Damping de alta inercia)
+    // Fricción ~ 0.915: permite que la partícula vuele libremente tras el impacto sin frenar en seco
+    // Spring ~ 0.065: la atrae de vuelta a su posición base con un rebote suave y elegante
+    const spring = 0.065;
+    const friction = 0.915;
 
     const homeDx = this.baseX - this.x;
     const homeDy = this.baseY - this.y;
@@ -117,12 +130,12 @@ interface HeroParticleTitleProps {
 
 /**
  * Componente HeroParticleTitle
- * - Renderiza el título H1 oculto semánticamente (sr-only) para SEO óptimo.
- * - Canvas en Alta Definición (HiDPI / Retina) con muestreo de alta densidad:
- *   * Escritorio (> 768px): 54px - 68px en 2 líneas, step: 2px (texto denso y continuo).
- *   * Móvil (< 768px): 32px - 40px en 3 líneas centradas, step: 3px (legible, 60fps).
- * - Renderizado por lotes (Batch Rendering): Solo 2 llamadas fill() por frame (Blanco Hueso y Oro Degradado).
- * - Scroll vertical no bloqueante con touch-action: pan-y y listeners pasivos.
+ * - H1 oculto semánticamente (sr-only) para SEO y accesibilidad completa.
+ * - Renderizado en Alta Definición Retina (HiDPI) a 60-120 FPS mediante Batch Rendering.
+ * - Física dinámica de impacto: cálculo instantáneo de velocidad en mousemove / touchmove.
+ *   * Movimientos lentos generan una estela suave.
+ *   * Movimientos rápidos / latigazos desatan una onda de choque expansiva.
+ * - Scroll vertical no bloqueante garantizado con touch-action: pan-y y listeners pasivos.
  */
 export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className = '' }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -142,27 +155,29 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
     let goldGradient: CanvasGradient | null = null;
     let isRunning = false;
 
-    // Dimensiones lógicas cacheadas para evitar lecturas DOM en cada fotograma
-    let currentLogicalWidth = 0;
-    let currentLogicalHeight = 0;
-
+    // Estado reactivo del puntero con cálculo cinético
     const mouse: IMouseState = {
       x: null,
       y: null,
-      radius: 95,
+      prevX: null,
+      prevY: null,
+      speed: 0,
+      smoothedSpeed: 0,
+      radius: 155,
+      baseRadius: 155,
+      forceFactor: 1.0,
       isActive: false,
     };
 
     /**
-     * Calcula la tipografía majestuosa y los parámetros de densidad:
-     * - Escritorio (>= 768px): 2 líneas, 54px a 68px, step: 2
-     * - Móvil (< 768px): 3 líneas limpias, 32px a 40px, step: 3
+     * Configuración de tipografía e interacción adaptativa:
+     * - Escritorio (>= 768px): 2 líneas, 54px a 68px, step: 2, radio base: 155px
+     * - Móvil (< 768px): 3 líneas centradas, 32px a 40px, step: 3, radio base: 90px
      */
     const getResponsiveSettings = (width: number): IResponsiveRenderSettings => {
       const isMobile = width < 768;
 
       if (isMobile) {
-        // Móvil (< 768px): 3 líneas perfectamente distribuidas
         const fontSize = Math.min(40, Math.max(31, Math.floor(width * 0.082)));
         const lineHeight = Math.floor(fontSize * 1.32);
         return {
@@ -173,14 +188,14 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
           ],
           fontSize,
           lineHeight,
-          step: 3, // Muestreo fino para móvil: elimina el aspecto pixelado y mantiene 60fps
-          particleSize: 1.6, // Diámetro ~3.2px que cubre los espacios entre partículas
-          mouseRadius: 65,
-          canvasHeight: lineHeight * 3 + 55,
+          step: 3,
+          particleSize: 1.6,
+          mouseRadius: 90, // Radio base en móvil (se expande hasta ~150px con swipe rápido)
+          canvasHeight: lineHeight * 3 + 70,
         };
       }
 
-      // Escritorio (>= 768px): 2 líneas imponentes de 54px a 68px
+      // Escritorio
       const fontSize = Math.min(68, Math.max(54, Math.floor(width * 0.062)));
       const lineHeight = Math.floor(fontSize * 1.26);
       return {
@@ -190,15 +205,15 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
         ],
         fontSize,
         lineHeight,
-        step: 2, // Paso de 2px en escritorio: densidad ultra-alta y lectura de texto continuo
-        particleSize: 1.35, // Diámetro ~2.7px con solapamiento suave que rellena los caracteres
-        mouseRadius: 100,
-        canvasHeight: lineHeight * 2 + 65,
+        step: 2,
+        particleSize: 1.35,
+        mouseRadius: 155, // Radio base en escritorio (se expande hasta ~255px en latigazos)
+        canvasHeight: lineHeight * 2 + 80,
       };
     };
 
     /**
-     * Inicializa o actualiza la malla de partículas mediante un canvas offscreen
+     * Inicializa las partículas y la malla rasterizada
      */
     const initParticles = () => {
       const rect = container.getBoundingClientRect();
@@ -207,8 +222,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       const settings = getResponsiveSettings(logicalWidth);
       const logicalHeight = settings.canvasHeight;
 
-      currentLogicalWidth = logicalWidth;
-      currentLogicalHeight = logicalHeight;
+      mouse.baseRadius = settings.mouseRadius;
       mouse.radius = settings.mouseRadius;
 
       // Soporte HiDPI / Retina Display
@@ -222,7 +236,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
 
-      // Canvas offscreen para rasterizar el texto con exactitud de subpíxel
+      // Canvas offscreen para rasterizar con precisión subpíxel
       const offscreen = document.createElement('canvas');
       offscreen.width = logicalWidth;
       offscreen.height = logicalHeight;
@@ -232,7 +246,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       offCtx.textAlign = 'center';
       offCtx.textBaseline = 'middle';
 
-      // Ajuste proporcional automático para evitar cualquier desborde horizontal
+      // Comprobación de seguridad contra desbordes
       let actualFontSize = settings.fontSize;
       offCtx.font = `700 ${actualFontSize}px 'Playfair Display', Georgia, serif`;
 
@@ -253,14 +267,12 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
 
       let goldBlockHalfWidth = 200;
 
-      // Dibujar cada línea en el offscreen canvas
       settings.lines.forEach((line, index) => {
         const lineY = startY + index * settings.lineHeight;
         const textMetrics = offCtx.measureText(line.text);
 
         if (line.isGold) {
           goldBlockHalfWidth = Math.max(goldBlockHalfWidth, textMetrics.width / 2);
-          // Máscara opaca para escaneo de píxeles
           offCtx.fillStyle = '#FFD700';
         } else {
           offCtx.fillStyle = '#FFFFFF';
@@ -269,7 +281,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
         offCtx.fillText(line.text, logicalWidth / 2, lineY);
       });
 
-      // Crear el degradado dorado metálico oficial de la marca
+      // Crear degradado dorado metálico oficial
       const grad = ctx.createLinearGradient(
         logicalWidth / 2 - goldBlockHalfWidth,
         0,
@@ -282,7 +294,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       grad.addColorStop(1, '#9A7B38');
       goldGradient = grad;
 
-      // Muestreo denso de píxeles (step fino)
+      // Muestreo denso de píxeles
       const imgData = offCtx.getImageData(0, 0, logicalWidth, logicalHeight);
       const data = imgData.data;
 
@@ -294,13 +306,9 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
           const index = (y * logicalWidth + x) * 4;
           const alpha = data[index + 3];
 
-          // Filtrar píxeles que conforman los glifos de las letras
           if (alpha > 60) {
             const r = data[index];
-            const g = data[index + 1];
             const b = data[index + 2];
-
-            // Si tiene componente roja alta y azul baja corresponde al color dorado
             const isGoldPixel = r > 180 && b < 100;
 
             if (isGoldPixel) {
@@ -317,17 +325,30 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
     };
 
     /**
-     * Bucle de animación optimizado por lotes (Batch Rendering a 60-120 FPS):
-     * Actualiza posiciones y dibuja todas las partículas con solo 2 llamadas fill()
+     * Bucle de renderizado cinético a 60-120 FPS
      */
     const animate = () => {
-      // Limpieza segura del canvas físico
+      // 1. Decaimiento natural de la velocidad suavizada del cursor
+      mouse.smoothedSpeed *= 0.88;
+      if (mouse.smoothedSpeed < 0.02) {
+        mouse.smoothedSpeed = 0;
+      }
+
+      // 2. Modulación dinámica de radio y fuerza según la velocidad del puntero
+      // Expansión del radio de impacto hasta +100px en latigazos
+      const speedRadiusExpansion = Math.min(mouse.smoothedSpeed * 38, 100);
+      mouse.radius = mouse.baseRadius + speedRadiusExpansion;
+
+      // Multiplicador de impacto de 1.0 (base) hasta 3.6x (alta velocidad)
+      mouse.forceFactor = 1.0 + Math.min(mouse.smoothedSpeed * 1.5, 2.6);
+
+      // Limpieza segura del lienzo físico
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
 
-      // 1. Actualizar física de todas las partículas
+      // 3. Actualizar física de partículas
       const totalWhite = whiteParticles.length;
       for (let i = 0; i < totalWhite; i++) {
         whiteParticles[i].update(mouse);
@@ -338,7 +359,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
         goldParticles[i].update(mouse);
       }
 
-      // 2. Batch 1: Partículas Blanco Hueso (#FBF9F4) en un único draw call
+      // 4. Batch 1: Partículas Blanco Hueso (#FBF9F4)
       ctx.fillStyle = '#FBF9F4';
       ctx.beginPath();
       for (let i = 0; i < totalWhite; i++) {
@@ -348,7 +369,7 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       }
       ctx.fill();
 
-      // 3. Batch 2: Partículas Oro Degradado de la marca en un único draw call
+      // 5. Batch 2: Partículas Oro Degradado
       if (goldGradient) {
         ctx.fillStyle = goldGradient;
         ctx.beginPath();
@@ -371,7 +392,6 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       }
     };
 
-    // Asegurar que la tipografía Playfair Display esté lista antes de muestrear píxeles
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(start);
     } else {
@@ -379,57 +399,93 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
     }
 
     // ==========================================================================
-    // Interacción Híbrida: Escritorio (Mouse) y Móvil (Touch)
+    // Interacción Cinética Híbrida: Medición de Velocidad Instantánea
     // ==========================================================================
 
-    const handleMouseMove = (e: MouseEvent) => {
+    let lastTime = performance.now();
+    let lastX = 0;
+    let lastY = 0;
+    let hasPrevCoord = false;
+
+    const updatePointer = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left;
-      mouse.y = e.clientY - rect.top;
+      const currentX = clientX - rect.left;
+      const currentY = clientY - rect.top;
+      const now = performance.now();
+      const dt = Math.max(now - lastTime, 10); // Milisegundos entre eventos (mín 10ms)
+
+      if (hasPrevCoord) {
+        const dx = currentX - lastX;
+        const dy = currentY - lastY;
+        const distance = Math.hypot(dx, dy);
+
+        // Velocidad instantánea en px/ms
+        const instantSpeed = distance / dt;
+        mouse.speed = instantSpeed;
+
+        // Suavizado exponencial para absorber picos y mantener la inercia expansiva
+        mouse.smoothedSpeed = Math.max(mouse.smoothedSpeed * 0.65 + instantSpeed * 0.35, instantSpeed);
+      } else {
+        hasPrevCoord = true;
+        mouse.speed = 0;
+      }
+
+      mouse.prevX = mouse.x;
+      mouse.prevY = mouse.y;
+      mouse.x = currentX;
+      mouse.y = currentY;
       mouse.isActive = true;
+
+      lastTime = now;
+      lastX = currentX;
+      lastY = currentY;
     };
 
-    const handleMouseLeave = () => {
+    const resetPointer = () => {
       mouse.isActive = false;
       mouse.x = null;
       mouse.y = null;
+      mouse.speed = 0;
+      mouse.smoothedSpeed = 0;
+      hasPrevCoord = false;
     };
 
-    // Eventos táctiles sin preventDefault: preservan al 100% el scroll vertical nativo
+    const handleMouseMove = (e: MouseEvent) => {
+      updatePointer(e.clientX, e.clientY);
+    };
+
+    const handleMouseLeave = () => {
+      resetPointer();
+    };
+
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
-        mouse.x = e.touches[0].clientX - rect.left;
-        mouse.y = e.touches[0].clientY - rect.top;
-        mouse.isActive = true;
+        hasPrevCoord = false;
+        const touch = e.touches[0];
+        updatePointer(touch.clientX, touch.clientY);
       }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        const rect = canvas.getBoundingClientRect();
-        mouse.x = e.touches[0].clientX - rect.left;
-        mouse.y = e.touches[0].clientY - rect.top;
-        mouse.isActive = true;
+        const touch = e.touches[0];
+        updatePointer(touch.clientX, touch.clientY);
       }
     };
 
     const handleTouchEnd = () => {
-      mouse.isActive = false;
-      mouse.x = null;
-      mouse.y = null;
+      resetPointer();
     };
 
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseleave', handleMouseLeave);
 
-    // { passive: true } garantiza respuesta inmediata de desplazamiento vertical
+    // Listeners táctiles con passive: true y touch-action: pan-y para preservar el scroll nativo
     canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
     canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
     canvas.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
-    // Observador de redimensionamiento con debounce
     let resizeTimeout: number;
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -444,7 +500,6 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
 
     resizeObserver.observe(container);
 
-    // Limpieza estricta de memoria al desmontar
     return () => {
       cancelAnimationFrame(animationFrameId);
       clearTimeout(resizeTimeout);
@@ -462,11 +517,10 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full max-w-5xl mx-auto flex flex-col items-center justify-center min-h-[200px] sm:min-h-[230px] lg:min-h-[250px] overflow-hidden ${className}`}
+      className={`relative w-full max-w-5xl mx-auto flex flex-col items-center justify-center min-h-[220px] sm:min-h-[260px] lg:min-h-[280px] overflow-hidden ${className}`}
     >
       {/* 
-        H1 semántico oculto con sr-only para SEO impecable.
-        Google, Bing y lectores de pantalla leen este título sin alteraciones.
+        H1 semántico oculto con sr-only para SEO y accesibilidad completa.
       */}
       <h1 className="sr-only">
         El Arte del Buen Gusto, Barbería Tradicional &amp; Spa
@@ -475,7 +529,6 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
       {/* 
         Canvas de partículas interactivo en Alta Definición.
         - touchAction: 'pan-y' garantiza el scroll táctil vertical nativo.
-        - aria-hidden='true' para no duplicar el contenido con el H1 semántico.
       */}
       <canvas
         ref={canvasRef}
