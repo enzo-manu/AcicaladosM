@@ -85,11 +85,25 @@ WHERE id NOT IN (
   SELECT id FROM auth.users WHERE LOWER(email) IN ('enzocostareyes@gmail.com', 'spaicort@gmail.com')
 );
 
--- 3. ENDURECER POLÍTICAS RLS EN public.bookings
+-- 3. FUNCIONES HELPER Y PERMISOS DE ESQUEMA
+CREATE OR REPLACE FUNCTION public.get_user_role()
+RETURNS text
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_user_role() TO authenticated, anon, service_role;
+GRANT USAGE ON SCHEMA private TO authenticated, anon, service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA private TO authenticated, anon, service_role;
+
+-- 4. ENDURECER POLÍTICAS RLS EN public.bookings
 -- Asegurar que RLS esté habilitado
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 
--- Eliminar políticas permisivas residuales
+-- Eliminar políticas residuales
 DROP POLICY IF EXISTS "bookings_delete_all" ON public.bookings;
 DROP POLICY IF EXISTS "bookings_update_all" ON public.bookings;
 DROP POLICY IF EXISTS "bookings_select_all" ON public.bookings;
@@ -107,12 +121,12 @@ CREATE POLICY "bookings_select_strict" ON public.bookings
   FOR SELECT
   TO public
   USING (
-    (private.get_user_role() IN ('admin', 'recepcionista'))
-    OR (user_id = (SELECT auth.uid()))
-    OR (client_email = (SELECT email FROM auth.users WHERE id = (SELECT auth.uid())))
+    (public.get_user_role() IN ('admin', 'recepcionista'))
+    OR (user_id = auth.uid())
+    OR (client_email = (auth.jwt() ->> 'email'))
     OR (
-      (private.get_user_role() = 'empleado') 
-      AND (assigned_employee_id IN (SELECT id FROM public.employees WHERE profile_id = (SELECT auth.uid())))
+      (public.get_user_role() = 'empleado') 
+      AND (assigned_employee_id IN (SELECT id FROM public.employees WHERE profile_id = auth.uid()))
     )
   );
 
@@ -127,10 +141,10 @@ CREATE POLICY "bookings_update_strict" ON public.bookings
   FOR UPDATE
   TO public
   USING (
-    private.get_user_role() IN ('admin', 'recepcionista')
+    public.get_user_role() IN ('admin', 'recepcionista')
   )
   WITH CHECK (
-    private.get_user_role() IN ('admin', 'recepcionista')
+    public.get_user_role() IN ('admin', 'recepcionista')
   );
 
 -- DELETE: Exclusivo para 'admin'. Recepcionista tiene estrictamente prohibido el borrado.
@@ -138,13 +152,13 @@ CREATE POLICY "bookings_delete_strict" ON public.bookings
   FOR DELETE
   TO public
   USING (
-    private.get_user_role() = 'admin'
+    public.get_user_role() = 'admin'
   );
 
--- 4. ENDURECER POLÍTICAS RLS EN public.booking_services
+-- 5. ENDURECER POLÍTICAS RLS EN public.booking_services
 ALTER TABLE public.booking_services ENABLE ROW LEVEL SECURITY;
 
--- Eliminar políticas permisivas residuales
+-- Eliminar políticas residuales
 DROP POLICY IF EXISTS "booking_services_delete_all" ON public.booking_services;
 DROP POLICY IF EXISTS "booking_services_update_all" ON public.booking_services;
 DROP POLICY IF EXISTS "booking_services_select_all" ON public.booking_services;
@@ -159,11 +173,11 @@ CREATE POLICY "booking_services_select_strict" ON public.booking_services
   FOR SELECT
   TO public
   USING (
-    (private.get_user_role() IN ('admin', 'recepcionista'))
+    (public.get_user_role() IN ('admin', 'recepcionista'))
     OR EXISTS (
       SELECT 1 FROM public.bookings b 
       WHERE b.id = booking_services.booking_id 
-      AND (b.user_id = (SELECT auth.uid()) OR (SELECT auth.uid()) IS NULL)
+      AND (b.user_id = auth.uid() OR auth.uid() IS NULL)
     )
   );
 
@@ -178,10 +192,10 @@ CREATE POLICY "booking_services_update_strict" ON public.booking_services
   FOR UPDATE
   TO public
   USING (
-    private.get_user_role() IN ('admin', 'recepcionista')
+    public.get_user_role() IN ('admin', 'recepcionista')
   )
   WITH CHECK (
-    private.get_user_role() IN ('admin', 'recepcionista')
+    public.get_user_role() IN ('admin', 'recepcionista')
   );
 
 -- DELETE: Exclusivo para 'admin'
@@ -189,5 +203,19 @@ CREATE POLICY "booking_services_delete_strict" ON public.booking_services
   FOR DELETE
   TO public
   USING (
-    private.get_user_role() = 'admin'
+    public.get_user_role() = 'admin'
+  );
+
+-- 6. CLAVE FORÁNEA ON DELETE CASCADE Y POLÍTICAS EN public.payment_logs
+ALTER TABLE public.payment_logs DROP CONSTRAINT IF EXISTS payment_logs_booking_id_fkey;
+ALTER TABLE public.payment_logs 
+  ADD CONSTRAINT payment_logs_booking_id_fkey 
+  FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE;
+
+DROP POLICY IF EXISTS "payment_logs_delete_admin" ON public.payment_logs;
+CREATE POLICY "payment_logs_delete_admin" ON public.payment_logs
+  FOR DELETE
+  TO public
+  USING (
+    public.get_user_role() = 'admin'
   );

@@ -229,17 +229,31 @@ export const ReservasManager: React.FC = () => {
 
   // Handle Delete Reservation (Admin only)
   const handleOpenDeleteModal = (b: Booking) => {
+    if (currentRole !== 'admin') {
+      alert('Acceso denegado: Solo el Administrador puede eliminar reservas permanentemente.');
+      return;
+    }
     setBookingToDelete(b);
     setIsDeleteModalOpen(true);
   };
 
   const handleConfirmDelete = async () => {
     if (!bookingToDelete) return;
+
+    if (currentRole !== 'admin') {
+      alert('Acceso no autorizado: Se requieren privilegios de Administrador para eliminar reservas.');
+      setIsDeleteModalOpen(false);
+      setBookingToDelete(null);
+      return;
+    }
+
     setIsDeleting(true);
     try {
       await deleteBooking(bookingToDelete.id);
       setIsDeleteModalOpen(false);
       setBookingToDelete(null);
+    } catch (err: any) {
+      alert(`No se pudo eliminar la reserva: ${err?.message || 'Error en el servidor o permisos denegados.'}`);
     } finally {
       setIsDeleting(false);
     }

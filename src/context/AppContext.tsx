@@ -1072,24 +1072,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [pulseRealtime]);
 
   const deleteBooking = useCallback(async (bookingId: string): Promise<boolean> => {
+    // 1. Verificación estricta de rol Administrador
+    if (currentRole !== 'admin') {
+      console.error('Permiso denegado: solo el Administrador puede eliminar reservas.');
+      throw new Error('Permiso denegado: Solo los administradores pueden eliminar reservas permanentemente.');
+    }
+
     try {
+      // 2. Si la reserva está en Supabase (UUID de 36 caracteres)
+      if (bookingId.includes('-') && bookingId.length === 36) {
+        const { data, error } = await supabase
+          .from('bookings')
+          .delete()
+          .eq('id', bookingId)
+          .select('id');
+
+        if (error) {
+          console.error('Error al eliminar reserva en Supabase:', error);
+          throw new Error(error.message || 'Error en la base de datos al eliminar reserva');
+        }
+
+        // Si data está vacío, RLS rechazó el DELETE o el registro no existe
+        if (!data || data.length === 0) {
+          console.error('Supabase RLS denegó la eliminación (0 registros afectados).');
+          throw new Error('No se pudo eliminar en el servidor: la política de seguridad RLS rechazó la operación.');
+        }
+      }
+
+      // 3. Confirmación en estado local
       setBookings((prev) => prev.filter((b) => b.id !== bookingId));
       pulseRealtime();
 
-      if (bookingId.includes('-') && bookingId.length === 36) {
-        const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
-        if (error) {
-          console.error('Error al eliminar reserva en Supabase:', error);
-          fetchAllFromSupabase();
-          throw error;
-        }
-      }
+      // 4. Revalidar caché inmediatamente desde Supabase
+      await fetchAllFromSupabase();
       return true;
     } catch (err) {
       console.error('Error en deleteBooking:', err);
-      return false;
+      // Re-sincronizar tabla ante cualquier anomalía
+      await fetchAllFromSupabase();
+      throw err;
     }
-  }, [fetchAllFromSupabase, pulseRealtime]);
+  }, [currentRole, fetchAllFromSupabase, pulseRealtime]);
 
   const editBooking = useCallback(async (bookingId: string, updates: Partial<Booking>): Promise<boolean> => {
     try {
