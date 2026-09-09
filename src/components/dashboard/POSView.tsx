@@ -86,6 +86,16 @@ export const POSView: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'yape' | 'transferencia' | 'mixto'>('efectivo');
   const [saleDateTime, setSaleDateTime] = useState<string>(getLimaCurrentDateTimeString());
 
+  // Estados del Modo Mixto (Selección múltiple de exactamente 2 métodos)
+  type BasePaymentMethod = 'efectivo' | 'yape' | 'transferencia';
+  const [isMixtoMode, setIsMixtoMode] = useState<boolean>(false);
+  const [selectedSubMethods, setSelectedSubMethods] = useState<BasePaymentMethod[]>([]);
+  const [mixtoAmounts, setMixtoAmounts] = useState<Record<BasePaymentMethod, string>>({
+    efectivo: '',
+    yape: '',
+    transferencia: '',
+  });
+
   // Estados de interfaz y feedback
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -141,6 +151,198 @@ export const POSView: React.FC = () => {
   const totalCents = Math.round(quantity * parsedPrice * 100);
   const formattedTotal = formatSoles(totalCents);
 
+  // Cálculos y Validación para Modo Mixto
+  const currentMixtoSumCents = useMemo(() => {
+    if (!isMixtoMode) return totalCents;
+    return selectedSubMethods.reduce((acc, m) => {
+      const val = parseFloat(mixtoAmounts[m]) || 0;
+      return acc + Math.round(val * 100);
+    }, 0);
+  }, [isMixtoMode, selectedSubMethods, mixtoAmounts, totalCents]);
+
+  const isMixtoBalanced = useMemo(() => {
+    if (!isMixtoMode) return true;
+    if (selectedSubMethods.length !== 2) return false;
+    if (totalCents <= 0) return false;
+    const cents1 = Math.round((parseFloat(mixtoAmounts[selectedSubMethods[0]]) || 0) * 100);
+    const cents2 = Math.round((parseFloat(mixtoAmounts[selectedSubMethods[1]]) || 0) * 100);
+    return cents1 > 0 && cents2 > 0 && cents1 + cents2 === totalCents;
+  }, [isMixtoMode, selectedSubMethods, mixtoAmounts, totalCents]);
+
+  const mixtoDiffCents = totalCents - currentMixtoSumCents;
+
+  const isSubmitDisabled =
+    !clientName.trim() ||
+    !productDesc.trim() ||
+    quantity < 1 ||
+    parsedPrice < 0 ||
+    totalCents <= 0 ||
+    (isMixtoMode && (!isMixtoBalanced || selectedSubMethods.length !== 2));
+
+  // Toggle del Modo Mixto
+  const handleToggleMixto = () => {
+    if (isMixtoMode) {
+      // Desactivar: regresa al modo de selección única tradicional con Efectivo por defecto
+      setIsMixtoMode(false);
+      setSelectedSubMethods([]);
+      setMixtoAmounts({ efectivo: '', yape: '', transferencia: '' });
+      setPaymentMethod('efectivo');
+    } else {
+      // Activar: modo combinado
+      setIsMixtoMode(true);
+      setPaymentMethod('mixto');
+      const baseSub1: BasePaymentMethod = paymentMethod === 'mixto' ? 'efectivo' : paymentMethod;
+      const baseSub2: BasePaymentMethod = baseSub1 === 'efectivo' ? 'yape' : 'efectivo';
+      const initialSubs: BasePaymentMethod[] = [baseSub1, baseSub2];
+      setSelectedSubMethods(initialSubs);
+
+      const totalSoles = totalCents / 100;
+      if (totalSoles > 0) {
+        const half = Number((totalSoles / 2).toFixed(2));
+        const rest = Number((totalSoles - half).toFixed(2));
+        setMixtoAmounts({
+          efectivo: initialSubs.includes('efectivo') ? (initialSubs[0] === 'efectivo' ? half.toFixed(2) : rest.toFixed(2)) : '',
+          yape: initialSubs.includes('yape') ? (initialSubs[0] === 'yape' ? half.toFixed(2) : rest.toFixed(2)) : '',
+          transferencia: initialSubs.includes('transferencia') ? (initialSubs[0] === 'transferencia' ? half.toFixed(2) : rest.toFixed(2)) : '',
+        });
+      } else {
+        setMixtoAmounts({ efectivo: '', yape: '', transferencia: '' });
+      }
+    }
+  };
+
+  // Selección de Submétodos en Modo Mixto o Método Único Tradicional
+  const handleSelectPaymentMethod = (method: BasePaymentMethod) => {
+    if (!isMixtoMode) {
+      setPaymentMethod(method);
+      return;
+    }
+
+    const totalSoles = totalCents / 100;
+    if (selectedSubMethods.includes(method)) {
+      // Deseleccionar este método
+      const updated = selectedSubMethods.filter((m) => m !== method);
+      setSelectedSubMethods(updated);
+      setMixtoAmounts((prev) => ({ ...prev, [method]: '' }));
+    } else {
+      if (selectedSubMethods.length < 2) {
+        const updated = [...selectedSubMethods, method];
+        setSelectedSubMethods(updated);
+        // Si ahora son 2, autocompletar la diferencia con el primero
+        if (updated.length === 2) {
+          const firstMethod = updated[0];
+          const firstVal = parseFloat(mixtoAmounts[firstMethod]) || 0;
+          const diff = Math.max(0, Number((totalSoles - firstVal).toFixed(2)));
+          setMixtoAmounts((prev) => ({
+            ...prev,
+            [method]: diff.toFixed(2),
+          }));
+        }
+      } else {
+        // Exactamente 2 a la vez: sustituir el segundo seleccionado
+        const keptMethod = selectedSubMethods[0];
+        const removedMethod = selectedSubMethods[1];
+        const updated = [keptMethod, method];
+        setSelectedSubMethods(updated);
+
+        const keptVal = parseFloat(mixtoAmounts[keptMethod]) || 0;
+        const diff = Math.max(0, Number((totalSoles - keptVal).toFixed(2)));
+        setMixtoAmounts((prev) => ({
+          ...prev,
+          [removedMethod]: '',
+          [method]: diff.toFixed(2),
+        }));
+      }
+    }
+  };
+
+  // Cambio en los campos de desglose de montos con autocompletado de diferencia
+  const handleMixtoAmountChange = (method: BasePaymentMethod, rawVal: string) => {
+    const sanitized = rawVal.replace(/[^0-9.]/g, '');
+    const parts = sanitized.split('.');
+    const cleanVal = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : sanitized;
+
+    const totalSoles = totalCents / 100;
+    const numVal = parseFloat(cleanVal);
+
+    if (selectedSubMethods.length === 2) {
+      const otherMethod = selectedSubMethods.find((m) => m !== method);
+      if (otherMethod) {
+        if (cleanVal === '') {
+          setMixtoAmounts((prev) => ({
+            ...prev,
+            [method]: '',
+          }));
+          return;
+        }
+
+        if (!isNaN(numVal) && numVal >= 0 && numVal <= totalSoles) {
+          const diff = Number((totalSoles - numVal).toFixed(2));
+          setMixtoAmounts((prev) => ({
+            ...prev,
+            [method]: cleanVal,
+            [otherMethod]: diff >= 0 ? diff.toFixed(2) : '0.00',
+          }));
+          return;
+        }
+      }
+    }
+
+    setMixtoAmounts((prev) => ({
+      ...prev,
+      [method]: cleanVal,
+    }));
+  };
+
+  // Auto-ajustar diferencia en caso de descuadre
+  const handleAutoBalance = () => {
+    if (selectedSubMethods.length !== 2 || totalCents <= 0) return;
+    const m1 = selectedSubMethods[0];
+    const m2 = selectedSubMethods[1];
+    const val1 = parseFloat(mixtoAmounts[m1]) || 0;
+    const totalSoles = totalCents / 100;
+    if (val1 < totalSoles) {
+      const diff = Number((totalSoles - val1).toFixed(2));
+      setMixtoAmounts((prev) => ({
+        ...prev,
+        [m2]: diff.toFixed(2),
+      }));
+    } else {
+      const half = Number((totalSoles / 2).toFixed(2));
+      const rest = Number((totalSoles - half).toFixed(2));
+      setMixtoAmounts((prev) => ({
+        ...prev,
+        [m1]: half.toFixed(2),
+        [m2]: rest.toFixed(2),
+      }));
+    }
+  };
+
+  // Sincronizar autocompletado en Mixto cuando cambia el total
+  useEffect(() => {
+    if (!isMixtoMode || selectedSubMethods.length !== 2) return;
+    const totalSoles = totalCents / 100;
+    const m1 = selectedSubMethods[0];
+    const m2 = selectedSubMethods[1];
+    const val1 = parseFloat(mixtoAmounts[m1]);
+
+    if (!isNaN(val1) && val1 >= 0 && val1 <= totalSoles) {
+      const diff = Number((totalSoles - val1).toFixed(2));
+      setMixtoAmounts((prev) => ({
+        ...prev,
+        [m2]: diff.toFixed(2),
+      }));
+    } else if (totalSoles > 0 && !mixtoAmounts[m1] && !mixtoAmounts[m2]) {
+      const half = Number((totalSoles / 2).toFixed(2));
+      const rest = Number((totalSoles - half).toFixed(2));
+      setMixtoAmounts((prev) => ({
+        ...prev,
+        [m1]: half.toFixed(2),
+        [m2]: rest.toFixed(2),
+      }));
+    }
+  }, [totalCents, isMixtoMode, selectedSubMethods]);
+
   // Procesamiento del Registro de Venta
   const handleSubmitSale = (andPrint: boolean) => {
     setValidationError(null);
@@ -175,6 +377,17 @@ export const POSView: React.FC = () => {
       return;
     }
 
+    if (isMixtoMode) {
+      if (selectedSubMethods.length !== 2) {
+        setValidationError('En modo Mixto debes seleccionar exactamente 2 métodos de pago.');
+        return;
+      }
+      if (!isMixtoBalanced) {
+        setValidationError(`En modo Mixto la suma de los montos (${formatSoles(currentMixtoSumCents)}) debe ser exactamente igual al total calculado (${formattedTotal}).`);
+        return;
+      }
+    }
+
     // Convertir fecha de Lima a ISO UTC para almacenamiento
     let isoDateTimeString = new Date().toISOString();
     try {
@@ -187,6 +400,34 @@ export const POSView: React.FC = () => {
 
     const unitPriceCents = Math.round(parsedPrice * 100);
 
+    const mEfectivo = isMixtoMode && selectedSubMethods.includes('efectivo')
+      ? parseFloat(mixtoAmounts.efectivo) || 0
+      : undefined;
+    const mYape = isMixtoMode && selectedSubMethods.includes('yape')
+      ? parseFloat(mixtoAmounts.yape) || 0
+      : undefined;
+    const mTransferencia = isMixtoMode && selectedSubMethods.includes('transferencia')
+      ? parseFloat(mixtoAmounts.transferencia) || 0
+      : undefined;
+
+    const cashCents = mEfectivo != null ? Math.round(mEfectivo * 100) : (paymentMethod === 'efectivo' ? totalCents : undefined);
+    const yapeCents = mYape != null ? Math.round(mYape * 100) : (paymentMethod === 'yape' ? totalCents : undefined);
+    const transferCents = mTransferencia != null ? Math.round(mTransferencia * 100) : (paymentMethod === 'transferencia' ? totalCents : undefined);
+
+    const detallesPago = isMixtoMode
+      ? {
+          metodos: selectedSubMethods,
+          efectivo: mEfectivo,
+          yape: mYape,
+          transferencia: mTransferencia,
+        }
+      : undefined;
+
+    const baseNotes = selectedProductId ? 'Producto de catálogo' : 'Venta libre mostrador';
+    const finalNotes = isMixtoMode
+      ? `${baseNotes} [Mixto: ${selectedSubMethods.map((m) => `${m.toUpperCase()}: S/ ${mixtoAmounts[m]}`).join(' + ')}]`
+      : baseNotes;
+
     const newSale = registerCounterSale({
       product_id: selectedProductId || undefined,
       product_name: productDesc.trim(),
@@ -196,9 +437,16 @@ export const POSView: React.FC = () => {
       client_name: clientName.trim(),
       client_dni: clientDni.trim() || undefined,
       client_phone: clientPhone.trim() || undefined,
-      payment_method: paymentMethod,
+      payment_method: isMixtoMode ? 'MIXTO' : paymentMethod,
+      cash_cents: cashCents,
+      yape_cents: yapeCents,
+      transfer_cents: transferCents,
+      monto_efectivo: mEfectivo,
+      monto_yape: mYape,
+      monto_transferencia: mTransferencia,
+      detalles_pago: detallesPago,
       created_at: isoDateTimeString,
-      notes: selectedProductId ? 'Producto de catálogo' : 'Venta libre mostrador',
+      notes: finalNotes,
     });
 
     // Feedback visual
@@ -216,6 +464,10 @@ export const POSView: React.FC = () => {
     setQuantity(1);
     setUnitPrice('');
     setSaleDateTime(getLimaCurrentDateTimeString());
+    setIsMixtoMode(false);
+    setSelectedSubMethods([]);
+    setMixtoAmounts({ efectivo: '', yape: '', transferencia: '' });
+    setPaymentMethod('efectivo');
 
     // Si se solicitó imprimir, abrir el diálogo del ticket térmico
     if (andPrint) {
@@ -564,73 +816,194 @@ export const POSView: React.FC = () => {
         </div>
 
           {/* 3. FILA INTERMEDIA */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center pt-2 border-t border-neutral-800/70">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start pt-2 border-t border-neutral-800/70">
             {/* Método de Pago (4 Botones tipo Pill / Tarjeta) */}
-            <div className="md:col-span-7 space-y-2">
-              <span className="block text-neutral-300 font-semibold tracking-wide">
-                Método de Pago
-              </span>
+            <div className="md:col-span-7 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="block text-neutral-300 font-semibold tracking-wide">
+                  Método de Pago
+                </span>
+                {isMixtoMode ? (
+                  <span className="text-[10px] text-[#E6C875] font-semibold tracking-wide px-2 py-0.5 rounded-full bg-[#C8A45C]/15 border border-[#C8A45C]/35 animate-pulse">
+                    Modo Mixto Activo (Marca 2 opciones)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-neutral-500">
+                    Selección única
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 {/* Efectivo */}
                 <button
                   type="button"
                   id="pos-payment-efectivo"
-                  onClick={() => setPaymentMethod('efectivo')}
+                  onClick={() => handleSelectPaymentMethod('efectivo')}
                   className={`py-2.5 px-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition cursor-pointer border ${
-                    paymentMethod === 'efectivo'
-                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20'
+                    (!isMixtoMode && paymentMethod === 'efectivo') || (isMixtoMode && selectedSubMethods.includes('efectivo'))
+                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20 font-bold'
                       : 'bg-[#181818] text-neutral-400 hover:text-white border-neutral-800 hover:border-neutral-700'
                   }`}
                 >
                   <Banknote className="w-4 h-4" />
                   <span>Efectivo</span>
+                  {isMixtoMode && selectedSubMethods.includes('efectivo') && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                  )}
                 </button>
 
                 {/* Yape */}
                 <button
                   type="button"
                   id="pos-payment-yape"
-                  onClick={() => setPaymentMethod('yape')}
+                  onClick={() => handleSelectPaymentMethod('yape')}
                   className={`py-2.5 px-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition cursor-pointer border ${
-                    paymentMethod === 'yape'
-                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20'
+                    (!isMixtoMode && paymentMethod === 'yape') || (isMixtoMode && selectedSubMethods.includes('yape'))
+                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20 font-bold'
                       : 'bg-[#181818] text-neutral-400 hover:text-white border-neutral-800 hover:border-neutral-700'
                   }`}
                 >
                   <Smartphone className="w-4 h-4" />
                   <span>Yape</span>
+                  {isMixtoMode && selectedSubMethods.includes('yape') && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                  )}
                 </button>
 
                 {/* Transferencia */}
                 <button
                   type="button"
                   id="pos-payment-transferencia"
-                  onClick={() => setPaymentMethod('transferencia')}
+                  onClick={() => handleSelectPaymentMethod('transferencia')}
                   className={`py-2.5 px-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition cursor-pointer border ${
-                    paymentMethod === 'transferencia'
-                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20'
+                    (!isMixtoMode && paymentMethod === 'transferencia') || (isMixtoMode && selectedSubMethods.includes('transferencia'))
+                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20 font-bold'
                       : 'bg-[#181818] text-neutral-400 hover:text-white border-neutral-800 hover:border-neutral-700'
                   }`}
                 >
                   <Landmark className="w-4 h-4" />
                   <span>Transferencia</span>
+                  {isMixtoMode && selectedSubMethods.includes('transferencia') && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                  )}
                 </button>
 
-                {/* Mixto */}
+                {/* Mixto (Toggle / Switch de Modo Combinado) */}
                 <button
                   type="button"
                   id="pos-payment-mixto"
-                  onClick={() => setPaymentMethod('mixto')}
+                  onClick={handleToggleMixto}
                   className={`py-2.5 px-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition cursor-pointer border ${
-                    paymentMethod === 'mixto'
-                      ? 'bg-gradient-to-r from-[#C8A45C] to-[#E6C875] text-black border-[#C8A45C] shadow-lg shadow-[#C8A45C]/20'
+                    isMixtoMode
+                      ? 'bg-[#C8A45C]/20 text-[#E6C875] border-2 border-[#C8A45C] shadow-lg shadow-[#C8A45C]/25 ring-2 ring-[#C8A45C]/40 font-bold'
                       : 'bg-[#181818] text-neutral-400 hover:text-white border-neutral-800 hover:border-neutral-700'
                   }`}
+                  title={isMixtoMode ? 'Desactivar modo Mixto y volver a Efectivo' : 'Activar modo Mixto combinado'}
                 >
                   <ArrowLeftRight className="w-4 h-4" />
                   <span>Mixto</span>
+                  {isMixtoMode && (
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#C8A45C] text-black font-mono font-bold leading-tight uppercase">
+                      ON
+                    </span>
+                  )}
                 </button>
               </div>
+
+              {/* Desglose Dinámico de Montos en Modo Mixto */}
+              {isMixtoMode && (
+                <div className="mt-3 p-4 rounded-xl bg-[#171612] border border-[#C8A45C]/35 space-y-3.5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#C8A45C]/20 pb-2">
+                    <div className="flex items-center gap-2">
+                      <ArrowLeftRight className="w-4 h-4 text-[#C8A45C]" />
+                      <span className="text-xs font-bold text-white tracking-wide uppercase">
+                        Desglose de Pago Mixto
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#C8A45C]/20 text-[#E6C875] font-mono font-medium border border-[#C8A45C]/30">
+                        {selectedSubMethods.length}/2 métodos activos
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-400">
+                      Total a cuadrar: <strong className="text-[#E6C875] font-mono">{formattedTotal}</strong>
+                    </span>
+                  </div>
+
+                  {selectedSubMethods.length < 2 ? (
+                    <div className="p-3 rounded-lg bg-amber-950/25 border border-amber-800/40 text-amber-300 text-xs flex items-center gap-2.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                      <span>
+                        Selecciona <strong>{2 - selectedSubMethods.length} método(s) más</strong> arriba para activar los 2 campos de importe.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {selectedSubMethods.map((m) => {
+                        const label = m === 'efectivo' ? 'Efectivo' : m === 'yape' ? 'Yape' : 'Transferencia';
+                        const Icon = m === 'efectivo' ? Banknote : m === 'yape' ? Smartphone : Landmark;
+                        return (
+                          <div key={m} className="space-y-1.5">
+                            <label htmlFor={`pos-mixto-${m}`} className="flex items-center justify-between text-xs font-semibold text-neutral-300">
+                              <span className="flex items-center gap-1.5">
+                                <Icon className="w-3.5 h-3.5 text-[#C8A45C]" />
+                                <span>Monto {label} (S/)</span>
+                              </span>
+                              <span className="text-[10px] text-neutral-500 font-mono">Autocompleta</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 font-bold text-[#E6C875] text-xs">S/</span>
+                              <input
+                                id={`pos-mixto-${m}`}
+                                type="number"
+                                min="0"
+                                step="0.10"
+                                placeholder="0.00"
+                                value={mixtoAmounts[m]}
+                                onChange={(e) => handleMixtoAmountChange(m, e.target.value)}
+                                className="w-full bg-[#1F1E19] border border-[#C8A45C]/40 focus:border-[#C8A45C] focus:ring-1 focus:ring-[#C8A45C]/40 text-white font-bold font-mono rounded-xl pl-8 pr-3 py-2 outline-none transition text-xs"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Barra de Estado de Cuadre */}
+                  {selectedSubMethods.length === 2 && (
+                    <div className="pt-2 border-t border-[#C8A45C]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        {isMixtoBalanced ? (
+                          <span className="inline-flex items-center gap-1.5 text-emerald-400 font-semibold">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Cuadre exacto: S/ {(currentMixtoSumCents / 100).toFixed(2)} de {formattedTotal}</span>
+                          </span>
+                        ) : mixtoDiffCents > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 text-amber-400 font-semibold">
+                            <AlertCircle className="w-4 h-4 text-amber-400" />
+                            <span>Faltan S/ {(mixtoDiffCents / 100).toFixed(2)} para completar el total</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-red-400 font-semibold">
+                            <AlertCircle className="w-4 h-4 text-red-400" />
+                            <span>Excede por S/ {(Math.abs(mixtoDiffCents) / 100).toFixed(2)} del total</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {!isMixtoBalanced && totalCents > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleAutoBalance}
+                          className="self-end sm:self-auto text-[11px] font-semibold text-[#E6C875] hover:text-white underline underline-offset-2 transition cursor-pointer"
+                        >
+                          Cuadrar diferencia
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Fecha / Hora de Venta (Nativo, inicializado en America/Lima) */}
@@ -675,8 +1048,11 @@ export const POSView: React.FC = () => {
               <button
                 type="button"
                 id="btn-save-sale"
+                disabled={isSubmitDisabled}
                 onClick={() => handleSubmitSale(false)}
-                className="px-6 py-3 rounded-xl font-bold text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 transition flex items-center justify-center gap-2 shadow cursor-pointer active:scale-[0.98]"
+                className={`px-6 py-3 rounded-xl font-bold text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 transition flex items-center justify-center gap-2 shadow cursor-pointer active:scale-[0.98] ${
+                  isSubmitDisabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
+                }`}
               >
                 <CheckCircle2 className="w-4 h-4 text-[#C8A45C]" />
                 <span>Registrar Venta</span>
@@ -686,8 +1062,11 @@ export const POSView: React.FC = () => {
               <button
                 type="button"
                 id="btn-save-print-sale"
+                disabled={isSubmitDisabled}
                 onClick={() => handleSubmitSale(true)}
-                className="px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-[#D4AF37] via-[#E6C875] to-[#C8A45C] hover:from-[#DFCA8D] hover:to-[#D4AF37] text-black transition flex items-center justify-center gap-2.5 shadow-xl shadow-[#C8A45C]/25 cursor-pointer active:scale-[0.98]"
+                className={`px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-[#D4AF37] via-[#E6C875] to-[#C8A45C] hover:from-[#DFCA8D] hover:to-[#D4AF37] text-black transition flex items-center justify-center gap-2.5 shadow-xl shadow-[#C8A45C]/25 cursor-pointer active:scale-[0.98] ${
+                  isSubmitDisabled ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''
+                }`}
               >
                 <Printer className="w-4 h-4 text-black" />
                 <span>Registrar e Imprimir Ticket</span>
@@ -769,19 +1148,36 @@ export const POSView: React.FC = () => {
                       {v.client_name}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                          v.payment_method === 'efectivo'
-                            ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/50'
-                            : v.payment_method === 'yape'
-                            ? 'bg-purple-950/60 text-purple-300 border border-purple-800/50'
-                            : v.payment_method === 'transferencia'
-                            ? 'bg-blue-950/60 text-blue-300 border border-blue-800/50'
-                            : 'bg-amber-950/60 text-amber-300 border border-amber-800/50'
-                        }`}
-                      >
-                        {v.payment_method}
-                      </span>
+                      {v.payment_method?.toLowerCase() === 'mixto' ? (
+                        <div className="space-y-1">
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-amber-950/60 text-amber-300 border border-amber-800/50">
+                            MIXTO
+                          </span>
+                          <div className="text-[10px] font-mono text-neutral-400 space-y-0.5">
+                            {((v.monto_efectivo != null && v.monto_efectivo > 0) || (v.cash_cents != null && v.cash_cents > 0)) && (
+                              <div className="text-emerald-400/90">Efec: {formatSoles(v.cash_cents ?? Math.round((v.monto_efectivo || 0) * 100))}</div>
+                            )}
+                            {((v.monto_yape != null && v.monto_yape > 0) || (v.yape_cents != null && v.yape_cents > 0)) && (
+                              <div className="text-purple-400/90">Yape: {formatSoles(v.yape_cents ?? Math.round((v.monto_yape || 0) * 100))}</div>
+                            )}
+                            {((v.monto_transferencia != null && v.monto_transferencia > 0) || (v.transfer_cents != null && v.transfer_cents > 0)) && (
+                              <div className="text-blue-400/90">Transf: {formatSoles(v.transfer_cents ?? Math.round((v.monto_transferencia || 0) * 100))}</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
+                            v.payment_method === 'efectivo'
+                              ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/50'
+                              : v.payment_method === 'yape'
+                              ? 'bg-purple-950/60 text-purple-300 border border-purple-800/50'
+                              : 'bg-blue-950/60 text-blue-300 border border-blue-800/50'
+                          }`}
+                        >
+                          {v.payment_method}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-right font-bold text-[#E6C875] font-mono text-sm">
                       {formatSoles(v.total_price_cents)}

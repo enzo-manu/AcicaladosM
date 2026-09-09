@@ -189,9 +189,20 @@ export interface VentaMostrador {
   quantity: number;
   unit_price_cents: number;
   total_price_cents: number;
-  payment_method: 'efectivo' | 'yape' | 'transferencia' | 'mixto';
+  payment_method: 'efectivo' | 'yape' | 'transferencia' | 'mixto' | 'MIXTO';
   cash_cents?: number;
   yape_cents?: number;
+  transfer_cents?: number;
+  monto_efectivo?: number;
+  monto_yape?: number;
+  monto_transferencia?: number;
+  detalles_pago?: {
+    efectivo?: number;
+    yape?: number;
+    transferencia?: number;
+    metodos?: string[];
+    [key: string]: any;
+  };
   notes?: string;
   created_at: string;
 }

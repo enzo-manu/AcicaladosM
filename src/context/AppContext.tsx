@@ -457,18 +457,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('fecha', { ascending: false });
       if (dbVentas && dbVentas.length > 0) {
         setVentasMostrador(
-          dbVentas.map((v: any) => ({
-            id: v.id,
-            ticket_number: v.ticket_number || `TK-${v.id.substring(0, 5).toUpperCase()}`,
-            client_name: v.cliente_nombre,
-            product_name: v.producto_nombre,
-            quantity: v.cantidad,
-            unit_price_cents: Math.round(Number(v.precio_unitario) * 100),
-            total_price_cents: Math.round(Number(v.total) * 100),
-            payment_method: (v.metodo_pago?.toLowerCase() || 'efectivo') as any,
-            notes: v.notas || undefined,
-            created_at: v.fecha || v.created_at,
-          }))
+          dbVentas.map((v: any) => {
+            const isMixto = v.metodo_pago?.toLowerCase() === 'mixto';
+            const mEfectivo = v.monto_efectivo != null ? Number(v.monto_efectivo) : undefined;
+            const mYape = v.monto_yape != null ? Number(v.monto_yape) : undefined;
+            const mTransf = v.monto_transferencia != null ? Number(v.monto_transferencia) : undefined;
+            return {
+              id: v.id,
+              ticket_number: v.ticket_number || `TK-${v.id.substring(0, 5).toUpperCase()}`,
+              client_name: v.cliente_nombre,
+              product_name: v.producto_nombre,
+              quantity: v.cantidad,
+              unit_price_cents: Math.round(Number(v.precio_unitario) * 100),
+              total_price_cents: Math.round(Number(v.total) * 100),
+              payment_method: isMixto ? 'MIXTO' : (v.metodo_pago?.toLowerCase() || 'efectivo') as any,
+              notes: v.notas || undefined,
+              created_at: v.fecha || v.created_at,
+              monto_efectivo: mEfectivo,
+              monto_yape: mYape,
+              monto_transferencia: mTransf,
+              cash_cents: mEfectivo != null ? Math.round(mEfectivo * 100) : undefined,
+              yape_cents: mYape != null ? Math.round(mYape * 100) : undefined,
+              transfer_cents: mTransf != null ? Math.round(mTransf * 100) : undefined,
+              detalles_pago: v.detalles_pago || undefined,
+            };
+          })
         );
       }
 
@@ -1184,16 +1197,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pulseRealtime();
 
     // Guardar venta de mostrador en Supabase (destino autorizado acicaladosMej)
+    const isMixto = ventaData.payment_method?.toLowerCase() === 'mixto';
+    const finalMetodoPago = isMixto ? 'MIXTO' : (ventaData.payment_method.charAt(0).toUpperCase() + ventaData.payment_method.slice(1));
+
     supabase.from('ventas_mostrador').insert({
       cliente_nombre: ventaData.client_name,
       producto_nombre: ventaData.product_name,
       cantidad: ventaData.quantity,
       precio_unitario: ventaData.unit_price_cents / 100,
       total: ventaData.total_price_cents / 100,
-      metodo_pago: (ventaData.payment_method.charAt(0).toUpperCase() + ventaData.payment_method.slice(1)) as any,
+      metodo_pago: finalMetodoPago as any,
       notas: ventaData.notes || null,
       ticket_number: newVenta.ticket_number,
       fecha: newVenta.created_at,
+      monto_efectivo: ventaData.monto_efectivo ?? (ventaData.cash_cents != null ? ventaData.cash_cents / 100 : null),
+      monto_yape: ventaData.monto_yape ?? (ventaData.yape_cents != null ? ventaData.yape_cents / 100 : null),
+      monto_transferencia: ventaData.monto_transferencia ?? (ventaData.transfer_cents != null ? ventaData.transfer_cents / 100 : null),
+      detalles_pago: ventaData.detalles_pago || null,
     } as any).then();
 
     return newVenta;

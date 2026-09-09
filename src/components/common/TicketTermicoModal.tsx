@@ -220,6 +220,28 @@ export const TicketTermicoModal: React.FC = () => {
                     <span>MÉTODO DE PAGO:</span>
                     <span className="uppercase font-semibold">{ventaData.payment_method}</span>
                   </div>
+                  {ventaData.payment_method?.toLowerCase() === 'mixto' && (
+                    <div className="pl-2 pt-1 mt-0.5 space-y-0.5 text-[10px] text-neutral-600 border-l-2 border-neutral-300">
+                      {((ventaData.monto_efectivo != null && ventaData.monto_efectivo > 0) || (ventaData.cash_cents != null && ventaData.cash_cents > 0)) && (
+                        <div className="flex justify-between">
+                          <span>• Efectivo:</span>
+                          <span className="font-mono font-medium">{formatSoles(ventaData.cash_cents ?? Math.round((ventaData.monto_efectivo || 0) * 100))}</span>
+                        </div>
+                      )}
+                      {((ventaData.monto_yape != null && ventaData.monto_yape > 0) || (ventaData.yape_cents != null && ventaData.yape_cents > 0)) && (
+                        <div className="flex justify-between">
+                          <span>• Yape:</span>
+                          <span className="font-mono font-medium">{formatSoles(ventaData.yape_cents ?? Math.round((ventaData.monto_yape || 0) * 100))}</span>
+                        </div>
+                      )}
+                      {((ventaData.monto_transferencia != null && ventaData.monto_transferencia > 0) || (ventaData.transfer_cents != null && ventaData.transfer_cents > 0)) && (
+                        <div className="flex justify-between">
+                          <span>• Transferencia:</span>
+                          <span className="font-mono font-medium">{formatSoles(ventaData.transfer_cents ?? Math.round((ventaData.monto_transferencia || 0) * 100))}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : null}
             </div>
