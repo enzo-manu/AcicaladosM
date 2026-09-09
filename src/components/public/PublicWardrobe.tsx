@@ -28,7 +28,7 @@ export const PublicWardrobe: React.FC = () => {
   const handleInquireWhatsApp = (item: WardrobeItem) => {
     const code = (item.code || 'A').toUpperCase().trim();
     const text = encodeURIComponent(
-      `¡Hola Acicalados! Quisiera consultar la disponibilidad de alquiler de la prenda:\n\n*Código:* ${code}\n*Prenda:* ${item.name}\n*Categoría:* ${item.category}\n*Talla:* ${item.size}\n*Tarifa Alquiler:* ${formatSoles(item.rental_price_cents)}\n*Garantía Reembolsable:* ${formatSoles(item.deposit_cents)}\n\n¿Para qué fechas tienen agenda de prueba disponible?`
+      `¡Hola Acicalados! Quisiera consultar la disponibilidad de alquiler de la prenda:\n\n*Código:* ${code}\n*Prenda:* ${item.name}\n*Categoría:* ${item.category}\n*Tarifa Alquiler:* ${formatSoles(item.rental_price_cents)}\n*Garantía Reembolsable:* ${formatSoles(item.deposit_cents)}\n\n¿Para qué fechas tienen agenda de prueba disponible?`
     );
     window.open(`https://wa.me/51987654321?text=${text}`, '_blank');
   };
@@ -106,7 +106,7 @@ export const PublicWardrobe: React.FC = () => {
                       category: item.category,
                       code: `Código: ${codeDisplay}`,
                       price: `Alquiler: S/ ${priceFormatted}`,
-                      metadata: `Talla: ${item.size || 'Ajustable'}${item.deposit_cents ? ` · Garantía: ${formatSoles(item.deposit_cents)}` : ''}`,
+                      metadata: item.deposit_cents ? `Garantía Reembolsable: ${formatSoles(item.deposit_cents)}` : undefined,
                     })
                   }
                   className="relative aspect-[4/3] bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
@@ -148,10 +148,12 @@ export const PublicWardrobe: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Badge de Talla */}
-                  <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-neutral-800 text-[11px] text-[#E6C875] font-semibold">
-                    {item.size || 'Ajustable'}
-                  </div>
+                  {/* Badge de Garantía si aplica */}
+                  {item.deposit_cents ? (
+                    <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-neutral-800 text-[10px] text-neutral-300 font-medium">
+                      Garantía: {formatSoles(item.deposit_cents)}
+                    </div>
+                  ) : null}
 
                   {/* Precio Alquiler */}
                   <div className="absolute bottom-3 right-3">

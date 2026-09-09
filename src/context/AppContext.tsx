@@ -315,7 +315,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             status: (w.availability_status || 'disponible') as WardrobeStatus,
             active: w.is_active !== undefined ? w.is_active : true,
             image_url: w.images && w.images.length > 0 ? w.images[0] : 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80',
-            size: w.section || 'Standard / Ajustable',
             description: w.description || '',
           }))
         );
@@ -2223,14 +2222,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const insertPayload = {
         name: itemData.name,
         code: codeUpper,
-        description: itemData.description,
+        description: itemData.description || null,
         category: itemData.category,
         price_cents: itemData.rental_price_cents,
         deposit_cents: itemData.deposit_cents || 0,
         availability_status: itemData.status || 'disponible',
         is_active: itemData.active !== undefined ? itemData.active : true,
         images: itemData.image_url ? [itemData.image_url] : [],
-        section: itemData.size || 'Standard / Ajustable',
       };
 
       const { data, error } = await supabase
@@ -2259,7 +2257,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           status: (data.availability_status || 'disponible') as WardrobeStatus,
           active: data.is_active !== undefined ? data.is_active : true,
           image_url: data.images && data.images.length > 0 ? data.images[0] : itemData.image_url,
-          size: data.section || itemData.size || 'Standard / Ajustable',
           description: data.description || '',
         };
         setWardrobe((prev) => [...prev, newItem]);
@@ -2284,14 +2281,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { error } = await supabase.from('wardrobe_items').update({
           name: item.name,
           code: codeUpper,
-          description: item.description,
+          description: item.description || null,
           category: item.category,
           price_cents: item.rental_price_cents,
           deposit_cents: item.deposit_cents,
           availability_status: item.status,
           is_active: item.active !== undefined ? item.active : true,
           images: item.image_url ? [item.image_url] : [],
-          section: item.size,
           updated_at: new Date().toISOString(),
         }).eq('id', item.id);
 

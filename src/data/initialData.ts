@@ -1406,7 +1406,6 @@ export const INITIAL_WARDROBE: WardrobeItem[] = [
     rental_price_cents: 18000, // S/ 180.00
     deposit_cents: 10000, // S/ 100.00
     status: 'disponible',
-    size: 'M (Talla 40)',
     image_url: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80',
     description: 'Traje de corte sastre en lana fría, incluye pantalón con vivo de seda, faja y corbatín.',
   },
@@ -1418,7 +1417,6 @@ export const INITIAL_WARDROBE: WardrobeItem[] = [
     rental_price_cents: 19500, // S/ 195.00
     deposit_cents: 10000,
     status: 'disponible',
-    size: 'L (Talla 42)',
     image_url: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&w=600&q=80',
     description: 'Elegancia contemporánea en azul noche con solapa mantón en terciopelo.',
   },
@@ -1430,7 +1428,6 @@ export const INITIAL_WARDROBE: WardrobeItem[] = [
     rental_price_cents: 22000, // S/ 220.00
     deposit_cents: 12000,
     status: 'reservado',
-    size: 'S (Talla 28)',
     image_url: 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=600&q=80',
     description: 'Vestido confeccionado en satén pesado color vino tinto con pedrería fina en cintura.',
   },

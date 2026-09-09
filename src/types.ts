@@ -52,8 +52,7 @@ export interface WardrobeItem {
   status: WardrobeStatus;
   active?: boolean;
   image_url: string;
-  size: string;
-  description: string;
+  description?: string;
 }
 
 export type EmployeeType = 'barbero' | 'spa' | 'recepcionista';

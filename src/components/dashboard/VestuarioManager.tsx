@@ -105,7 +105,6 @@ export const VestuarioManager: React.FC = () => {
   const [formDescription, setFormDescription] = useState('');
   const [formPriceSoles, setFormPriceSoles] = useState<string>('180.00');
   const [formDepositSoles, setFormDepositSoles] = useState<string>('50.00');
-  const [formSize, setFormSize] = useState('Standard / Ajustable');
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
   const [formImageUrl, setFormImageUrl] = useState<string>('');
 
@@ -157,7 +156,6 @@ export const VestuarioManager: React.FC = () => {
     setFormDescription('');
     setFormPriceSoles('180.00');
     setFormDepositSoles('50.00');
-    setFormSize('Standard / Ajustable');
     setFormIsActive(true);
     setFormImageUrl('https://images.unsplash.com/photo-1594938298603-c8148c4dae35?auto=format&fit=crop&w=600&q=80');
     setImageCompressionInfo(null);
@@ -176,7 +174,6 @@ export const VestuarioManager: React.FC = () => {
     setFormDescription(item.description || '');
     setFormPriceSoles((item.rental_price_cents / 100).toFixed(2));
     setFormDepositSoles(((item.deposit_cents || 0) / 100).toFixed(2));
-    setFormSize(item.size || 'Standard / Ajustable');
     setFormIsActive(item.active !== false);
     setFormImageUrl(item.image_url || '');
     setImageCompressionInfo(null);
@@ -297,7 +294,6 @@ export const VestuarioManager: React.FC = () => {
           status: 'disponible',
           active: formIsActive,
           image_url: finalImageUrl,
-          size: formSize.trim() || 'Standard / Ajustable',
           description: formDescription.trim(),
         });
 
@@ -318,7 +314,6 @@ export const VestuarioManager: React.FC = () => {
           status: 'disponible',
           active: formIsActive,
           image_url: finalImageUrl,
-          size: formSize.trim() || 'Standard / Ajustable',
           description: formDescription.trim(),
         });
 
@@ -672,7 +667,7 @@ export const VestuarioManager: React.FC = () => {
                       category: item.category,
                       code: `Código: ${codeDisplay}`,
                       price: `S/ ${priceFormatted}`,
-                      metadata: `Talla: ${item.size || 'Ajustable'}${item.deposit_cents ? ` · Garantía: ${formatSoles(item.deposit_cents)}` : ''}`,
+                      metadata: item.deposit_cents ? `Garantía: ${formatSoles(item.deposit_cents)}` : undefined,
                     })
                   }
                   className="relative aspect-[4/3] w-full bg-neutral-900 overflow-hidden cursor-zoom-in group/img"
@@ -753,10 +748,10 @@ export const VestuarioManager: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Fila con detalles de talla y garantía */}
+                  {/* Fila con detalles de categoría y garantía */}
                   <div className="pt-3 border-t border-neutral-800/80 flex items-center justify-between text-[11px] text-neutral-400">
                     <span className="text-neutral-400">
-                      Talla: <strong className="text-white">{item.size || 'Ajustable'}</strong>
+                      Categoría: <strong className="text-neutral-200">{item.category}</strong>
                     </span>
                     {item.deposit_cents ? (
                       <span className="text-neutral-400">
@@ -902,10 +897,11 @@ export const VestuarioManager: React.FC = () => {
                 </p>
               </div>
 
-              {/* 3. Descripción */}
+              {/* 3. Descripción (Totalmente Opcional) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-300 block">
-                  Descripción (Detalles del traje, telas o acabados)
+                <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
+                  <span>Descripción (Detalles del traje, telas o acabados)</span>
+                  <span className="text-[10px] text-neutral-400 font-normal">(Opcional)</span>
                 </label>
                 <textarea
                   rows={2}
@@ -916,8 +912,8 @@ export const VestuarioManager: React.FC = () => {
                 />
               </div>
 
-              {/* 4. Precio de Referencia (S/) y Talla */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#181818]/60 p-4 rounded-2xl border border-neutral-800">
+              {/* 4. Tarifas: Precio de Referencia (S/) y Garantía Reembolsable */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#181818]/60 p-4 rounded-2xl border border-neutral-800">
                 {/* Precio de Referencia en Soles */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-300 flex items-center justify-between">
@@ -964,23 +960,6 @@ export const VestuarioManager: React.FC = () => {
                   </div>
                   <div className="text-[10px] text-neutral-400">
                     Reembolsable a la devolución
-                  </div>
-                </div>
-
-                {/* Talla / Medidas */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-300 block">
-                    Talla / Medidas
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Talla 40 / Ajustable"
-                    value={formSize}
-                    onChange={(e) => setFormSize(e.target.value)}
-                    className="w-full bg-[#141414] border border-neutral-700/80 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-[#C8A45C] transition-colors"
-                  />
-                  <div className="text-[10px] text-neutral-400">
-                    Ej. S, M, L o Talla de sastre
                   </div>
                 </div>
               </div>
@@ -1034,7 +1013,7 @@ export const VestuarioManager: React.FC = () => {
                           category: formCategory,
                           code: formCode ? `Código: ${formCode.toUpperCase()}` : undefined,
                           price: formPriceSoles ? `S/ ${formPriceSoles}` : undefined,
-                          metadata: `Talla: ${formSize || 'Ajustable'}`,
+                          metadata: formDepositSoles ? `Garantía: S/ ${formDepositSoles}` : undefined,
                         });
                       }
                     }}
