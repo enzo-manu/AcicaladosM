@@ -559,10 +559,11 @@ export const AsistenciaView: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL 1: QR Scanner (Webcam, mobile camera, image upload, fast punch) */}
+      {/* MODAL 1: QR Scanner (Webcam, mobile camera, image upload, fast punch - Control RBAC) */}
       <QRScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
+        userRole={currentRole}
       />
 
       {/* MODAL 2: Shift & Tolerances Configuration (Exclusively for Admin) */}

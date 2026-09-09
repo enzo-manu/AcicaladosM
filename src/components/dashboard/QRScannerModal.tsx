@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import jsQR from 'jsqr';
 import { useApp } from '../../context/AppContext';
-import { Employee, EmployeeAttendance } from '../../types';
+import { Employee, EmployeeAttendance, UserRole } from '../../types';
 import {
   X,
   Camera,
@@ -20,6 +20,7 @@ import {
 interface QRScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
+  userRole?: UserRole;
 }
 
 interface ScanResultState {
@@ -32,9 +33,15 @@ interface ScanResultState {
   minutes?: number;
 }
 
-export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose }) => {
-  const { employees, scanAttendanceQR } = useApp();
+export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose, userRole }) => {
+  const { employees, scanAttendanceQR, currentRole, currentUser } = useApp();
 
+  // Control RBAC: rol del usuario actual (admin vs recepcionista)
+  const effectiveRole: UserRole = userRole || currentRole || currentUser?.role || 'recepcionista';
+  const isAdmin = effectiveRole === 'admin';
+  const isRecepcionista = effectiveRole === 'recepcionista';
+
+  // Por defecto, vista siempre en 'camera' para cualquier rol
   const [activeTab, setActiveTab] = useState<'camera' | 'upload' | 'manual'>('camera');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -43,6 +50,21 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
 
   const [scanResult, setScanResult] = useState<ScanResultState | null>(null);
   const [manualSearch, setManualSearch] = useState<string>('');
+
+  // Asegurar que al abrir el modal la vista por defecto sea SIEMPRE 'camera'
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('camera');
+      setScanResult(null);
+    }
+  }, [isOpen]);
+
+  // Si el usuario no es administrador (ej. recepcionista), asegurar que activeTab siempre sea 'camera'
+  useEffect(() => {
+    if (!isAdmin && activeTab !== 'camera') {
+      setActiveTab('camera');
+    }
+  }, [isAdmin, activeTab]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -260,14 +282,25 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
               <Camera className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-serif-luxury text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
+              <h2 className="font-serif-luxury text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 flex-wrap">
                 <span>Escanear Asistencia QR</span>
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-[#C8A45C]/20 text-[#E6C875] border border-[#C8A45C]/30">
                   En Vivo
                 </span>
+                {isAdmin ? (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-500/30">
+                    Modo Administrador
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-blue-950/60 text-blue-300 border border-blue-500/30">
+                    Recepción
+                  </span>
+                )}
               </h2>
               <p className="text-[11px] text-neutral-400">
-                Lectura biométrica instantánea de fotochecks digitales
+                {isAdmin
+                  ? 'Lectura biométrica por cámara, carga de imágenes y marcación asistida'
+                  : 'Lectura biométrica instantánea de fotochecks digitales'}
               </p>
             </div>
           </div>
@@ -291,7 +324,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        {/* Modal Navigation Tabs */}
+        {/* Modal Navigation Tabs (Control RBAC: Solo Administrador tiene acceso a Subir Imagen y Marcación Rápida) */}
         <div className="px-5 pt-3 pb-2 border-b border-neutral-800/80 bg-[#161616] flex gap-2">
           <button
             type="button"
@@ -308,36 +341,42 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
             <Camera className="w-3.5 h-3.5" />
             <span>Cámara Web / Móvil</span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('upload');
-              setScanResult(null);
-            }}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition ${
-              activeTab === 'upload'
-                ? 'bg-[#C8A45C] text-black shadow-md'
-                : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
-            }`}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Subir Imagen</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('manual');
-              setScanResult(null);
-            }}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition ${
-              activeTab === 'manual'
-                ? 'bg-[#C8A45C] text-black shadow-md'
-                : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Marcación Rápida</span>
-          </button>
+
+          {isAdmin && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('upload');
+                  setScanResult(null);
+                }}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                  activeTab === 'upload'
+                    ? 'bg-[#C8A45C] text-black shadow-md'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Subir Imagen</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('manual');
+                  setScanResult(null);
+                }}
+                className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                  activeTab === 'manual'
+                    ? 'bg-[#C8A45C] text-black shadow-md'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Marcación Rápida</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Modal Body */}
@@ -416,8 +455,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
             </div>
           )}
 
-          {/* TAB 2: Image File Upload */}
-          {activeTab === 'upload' && (
+          {/* TAB 2: Image File Upload (Exclusivo Administrador) */}
+          {isAdmin && activeTab === 'upload' && (
             <div className="space-y-4">
               <label
                 htmlFor="qr-file-input"
@@ -441,8 +480,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({ isOpen, onClose 
             </div>
           )}
 
-          {/* TAB 3: Fast Manual Employee Punch */}
-          {activeTab === 'manual' && (
+          {/* TAB 3: Fast Manual Employee Punch (Exclusivo Administrador) */}
+          {isAdmin && activeTab === 'manual' && (
             <div className="space-y-3">
               <div className="relative">
                 <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />

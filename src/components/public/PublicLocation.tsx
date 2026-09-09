@@ -24,12 +24,11 @@ export const PublicLocation: React.FC = () => {
   const googleMapsEmbedUrl =
     'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3894.9700706224057!2d-73.8301556!3d-12.5181417!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x910d3d42e669f4f9%3A0x2aca54dcda907e97!2sSpa%20Acicalados%20Barber%20Shop!5e0!3m2!1sen!2spe!4v1788895596216!5m2!1sen!2spe';
 
-  const googleMapsDirectUrl =
-    'https://www.google.com/maps/place/Spa+Acicalados+Barber+Shop/@-12.5181417,-73.8301556,17z/data=!3m1!4b1!4m6!3m5!1s0x910d3d42e669f4f9:0x2aca54dcda907e97!8m2!3d-12.5181417!4d-73.8301556';
+  const googleMapsDirectUrl = 'https://maps.app.goo.gl/9ojPm9qdawhvqEYu9';
 
   const plusCode = 'F5J9+PX9 Pichari';
-  const whatsappNumber = '987654321';
-  const whatsappDisplay = '+51 987 654 321';
+  const whatsappNumber = '997766828';
+  const whatsappDisplay = '+51 997 766 828';
 
   // Check if open now according to Peru local time
   useEffect(() => {
@@ -75,10 +74,15 @@ export const PublicLocation: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-10 animate-in fade-in duration-300">
       {/* Page Header */}
       <div className="text-center space-y-3 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C8A45C]/15 border border-[#C8A45C]/35 text-[#E6C875] text-xs font-bold tracking-widest uppercase shadow-sm">
-          <img src="/icons/maps.svg" alt="Maps" className="w-4 h-4 object-contain" />
+        <a
+          href={googleMapsDirectUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#C8A45C]/15 hover:bg-[#C8A45C]/25 border border-[#C8A45C]/35 hover:border-[#C8A45C]/70 text-[#E6C875] text-xs font-bold tracking-widest uppercase shadow-sm transition-all duration-300 hover:scale-105"
+        >
+          <img src="/icons/maps.svg" alt="Google Maps" className="w-4 h-4 object-contain" />
           <span>Sede Oficial & Encuéntranos</span>
-        </div>
+        </a>
         <h1 className="font-serif-luxury text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-wide">
           Visítanos en Pichari
         </h1>
@@ -143,16 +147,27 @@ export const PublicLocation: React.FC = () => {
               <div className="space-y-4 text-xs">
                 {/* Address */}
                 <div className="flex items-start gap-3.5 group">
-                  <div className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/30 text-[#E6C875] flex items-center justify-center shrink-0 shadow-sm transition-all duration-300 group-hover:border-[#C8A45C]/60 group-hover:shadow-[0_0_12px_rgba(200,164,92,0.25)]">
-                    <img src="/icons/maps.svg" alt="Google Maps" className="w-5 h-5 object-contain transition-transform duration-300 group-hover:scale-110" />
-                  </div>
+                  <a
+                    href={googleMapsDirectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir ubicación en Google Maps"
+                    className="w-9 h-9 rounded-xl bg-[#C8A45C]/15 border border-[#C8A45C]/30 text-[#E6C875] flex items-center justify-center shrink-0 shadow-sm transition-all duration-300 group-hover:border-[#C8A45C]/80 group-hover:scale-110 group-hover:shadow-[0_0_15px_rgba(200,164,92,0.35)]"
+                  >
+                    <img src="/icons/maps.svg" alt="Google Maps" className="w-5 h-5 object-contain" />
+                  </a>
                   <div className="space-y-0.5">
                     <span className="text-neutral-400 font-semibold block text-[11px] uppercase tracking-wider">
                       Dirección Oficial:
                     </span>
-                    <p className="font-semibold text-white text-sm">
+                    <a
+                      href={googleMapsDirectUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-white hover:text-[#E6C875] text-sm transition-colors block"
+                    >
                       Av. Arriba Perú Mz. K - Lt. 9, Pichari 08850
-                    </p>
+                    </a>
                     <p className="text-neutral-400 text-xs">Cusco, Perú</p>
                   </div>
                 </div>

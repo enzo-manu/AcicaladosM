@@ -122,7 +122,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
               </p>
               <p className="flex items-center gap-1.5 text-neutral-300">
                 <Phone className="w-3.5 h-3.5 text-[#C8A45C]" />
-                <span>+51 987 654 321</span>
+                <span>+51 997 766 828</span>
               </p>
               <p className="text-[11px] text-neutral-500 pt-1">
                 Horario: Lun - Sáb 08:30 a 21:00 hrs. Dom 09:30 a 20:00 hrs.
@@ -137,7 +137,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
             </span>
             <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap">
               <a
-                href="https://facebook.com"
+                href="https://www.facebook.com/SpaAcicaladosBarberShop"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Facebook Oficial de Acicalados"
@@ -155,7 +155,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
               </a>
 
               <a
-                href="https://instagram.com"
+                href="https://www.instagram.com/spaacicaladosbarbershop"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram Oficial de Acicalados"
@@ -173,7 +173,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
               </a>
 
               <a
-                href="https://tiktok.com"
+                href="https://www.tiktok.com/@spa_acicalados?lang=es"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="TikTok Oficial de Acicalados"
@@ -191,7 +191,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
               </a>
 
               <a
-                href="https://wa.me/51987654321?text=Hola%20Spa%20Acicalados%20Barber%20Shop,%20quisiera%20consultar%20sobre%20sus%20servicios%20y%20citas"
+                href="https://wa.me/51997766828"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="WhatsApp Oficial de Acicalados"
@@ -209,7 +209,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({ children }) => {
               </a>
 
               <a
-                href="https://youtube.com"
+                href="https://www.youtube.com/@AcicaladosSPA"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="YouTube Oficial de Acicalados"
