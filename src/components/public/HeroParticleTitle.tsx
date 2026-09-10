@@ -31,6 +31,7 @@ export interface IParticle {
   size: number;
   isGold: boolean;
   density: number;
+  ease: number;
   update(mouse: IMouseState): void;
 }
 
@@ -54,8 +55,9 @@ export interface IResponsiveRenderSettings {
 /**
  * Clase Particle:
  * Modela la física balística y armónica de cada partícula:
- * - Repulsión por onda de choque proporcional a la velocidad del puntero
- * - Resorte armónico amortiguado (Spring-Damping) con fricción suave para retorno elástico y fluido
+ * - Spawn aleatorio inicial por toda la superficie del canvas (Scattered Start)
+ * - Ensamblaje fluido y elástico hacia su posición base en ~2 segundos (ease ~0.02 - 0.03)
+ * - Repulsión balística y onda expansiva interactiva ante el cursor/touch
  */
 class Particle implements IParticle {
   x: number;
@@ -67,17 +69,32 @@ class Particle implements IParticle {
   size: number;
   isGold: boolean;
   density: number;
+  ease: number;
 
-  constructor(baseX: number, baseY: number, size: number, isGold: boolean) {
+  constructor(
+    baseX: number,
+    baseY: number,
+    size: number,
+    isGold: boolean,
+    canvasWidth: number = 800,
+    canvasHeight: number = 500
+  ) {
     this.baseX = baseX;
     this.baseY = baseY;
-    // Sutil dispersión inicial para un ensamblado orgánico al montar
-    this.x = baseX + (Math.random() - 0.5) * 22;
-    this.y = baseY + (Math.random() - 0.5) * 22;
+
+    // 1. Spawn Aleatorio Inicial (Scattered Start):
+    // Inician completamente esparcidas a lo largo y ancho del canvas
+    this.x = Math.random() * canvasWidth;
+    this.y = Math.random() * canvasHeight;
+
     this.size = size;
     this.isGold = isGold;
+
     // Variación dinámica de masa / resistencia al impacto
     this.density = Math.random() * 16 + 12;
+
+    // 2. Constante ease (~0.02 - 0.03) para ensamblaje fluido en ~2 segundos
+    this.ease = 0.025 + Math.random() * 0.007; // Rango ~0.025 a 0.032
   }
 
   update(mouse: IMouseState): void {
@@ -104,23 +121,31 @@ class Particle implements IParticle {
       }
     }
 
-    // 2. Retorno elástico orgánico (Spring-Damping de alta inercia)
-    // Fricción ~ 0.915: permite que la partícula vuele libremente tras el impacto sin frenar en seco
-    // Spring ~ 0.065: la atrae de vuelta a su posición base con un rebote suave y elegante
-    const spring = 0.065;
-    const friction = 0.915;
-
+    // 2. Retorno elástico y ensamblaje fluido (~2 segundos hacia baseX/baseY)
     const homeDx = this.baseX - this.x;
     const homeDy = this.baseY - this.y;
 
-    this.vx += homeDx * spring;
-    this.vy += homeDy * spring;
+    // Desplazamiento fluido hacia la base utilizando la constante ease (~0.025 a 0.032)
+    this.x += homeDx * this.ease + this.vx;
+    this.y += homeDy * this.ease + this.vy;
 
+    // Fricción suave para amortiguar el impulso cinético tras el paso del cursor
+    const friction = 0.88;
     this.vx *= friction;
     this.vy *= friction;
 
-    this.x += this.vx;
-    this.y += this.vy;
+    // Estabilización precisa al llegar a la posición base
+    if (
+      Math.abs(homeDx) < 0.1 &&
+      Math.abs(homeDy) < 0.1 &&
+      Math.abs(this.vx) < 0.05 &&
+      Math.abs(this.vy) < 0.05
+    ) {
+      this.x = this.baseX;
+      this.y = this.baseY;
+      this.vx = 0;
+      this.vy = 0;
+    }
   }
 }
 
@@ -318,9 +343,9 @@ export const HeroParticleTitle: React.FC<HeroParticleTitleProps> = ({ className 
             const isGoldPixel = r > 180 && b < 100;
 
             if (isGoldPixel) {
-              newGold.push(new Particle(x, y, settings.particleSize, true));
+              newGold.push(new Particle(x, y, settings.particleSize, true, logicalWidth, logicalHeight));
             } else {
-              newWhite.push(new Particle(x, y, settings.particleSize, false));
+              newWhite.push(new Particle(x, y, settings.particleSize, false, logicalWidth, logicalHeight));
             }
           }
         }
