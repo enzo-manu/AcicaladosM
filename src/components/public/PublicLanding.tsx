@@ -41,6 +41,18 @@ export const PublicLanding: React.FC = () => {
       text: 'Puntualidad suiza y técnica de degradado superior. Además, el sistema de reserva online te garantiza el sillón sin esperas incómodas.',
       rating: 5,
     },
+    {
+      name: 'Carlos Mendoza',
+      role: 'Cliente Premium',
+      text: 'El tratamiento facial y la limpieza de cutis superaron mis expectativas. Un ambiente exclusivo y profesionales de primer nivel.',
+      rating: 5,
+    },
+    {
+      name: 'Fernando Vargas',
+      role: 'Abogado',
+      text: 'Mi lugar de confianza para cortes de estilo clásico. La atención al detalle es insuperable y el trato siempre es impecable.',
+      rating: 5,
+    },
   ];
 
   return (
@@ -226,7 +238,7 @@ export const PublicLanding: React.FC = () => {
       </section>
 
       {/* Testimonials */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      <section className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 overflow-hidden">
         <div className="text-center space-y-2 max-w-xl mx-auto">
           <span className="text-xs font-bold uppercase tracking-widest text-[#C8A45C]">
             Experiencias Reales
@@ -236,26 +248,59 @@ export const PublicLanding: React.FC = () => {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {testimonials.map((t, i) => (
-            <div
-              key={i}
-              className="bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/30 rounded-2xl p-6 space-y-4 transition"
-            >
-              <div className="flex gap-1 text-[#C8A45C]">
-                {[...Array(t.rating)].map((_, rIdx) => (
-                  <Star key={rIdx} className="w-4 h-4 fill-current" />
-                ))}
-              </div>
-              <p className="text-xs text-neutral-300 italic leading-relaxed">
-                "{t.text}"
-              </p>
-              <div className="pt-2 border-t border-neutral-800/80">
-                <h4 className="text-xs font-bold text-white">{t.name}</h4>
-                <span className="text-[10px] text-neutral-500">{t.role}</span>
-              </div>
+        {/* Viewport del Marquee con máscara lateral y contención estricta */}
+        <div className="relative w-full overflow-hidden marquee-mask py-4">
+          <div className="flex w-max animate-marquee hover:[animation-play-state:paused] active:[animation-play-state:paused]">
+            {/* Grupo 1: 5 Testimonios originales */}
+            <div className="flex gap-6 pr-6">
+              {testimonials.map((t, i) => (
+                <div
+                  key={`orig-${i}`}
+                  className="w-[320px] sm:w-[360px] flex-shrink-0 bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/30 rounded-2xl p-6 flex flex-col justify-between space-y-4 transition-all duration-300 hover:shadow-xl hover:shadow-black/70"
+                >
+                  <div className="space-y-3">
+                    <div className="flex gap-1 text-[#C8A45C]">
+                      {[...Array(t.rating)].map((_, rIdx) => (
+                        <Star key={rIdx} className="w-4 h-4 fill-current" />
+                      ))}
+                    </div>
+                    <p className="text-xs text-neutral-300 italic leading-relaxed">
+                      "{t.text}"
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-neutral-800/80">
+                    <h4 className="text-xs font-bold text-white">{t.name}</h4>
+                    <span className="text-[10px] text-neutral-500">{t.role}</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+
+            {/* Grupo 2: 5 Testimonios duplicados para bucle continuo */}
+            <div className="flex gap-6 pr-6" aria-hidden="true">
+              {testimonials.map((t, i) => (
+                <div
+                  key={`dup-${i}`}
+                  className="w-[320px] sm:w-[360px] flex-shrink-0 bg-[#141414] border border-neutral-800 hover:border-[#C8A45C]/30 rounded-2xl p-6 flex flex-col justify-between space-y-4 transition-all duration-300 hover:shadow-xl hover:shadow-black/70"
+                >
+                  <div className="space-y-3">
+                    <div className="flex gap-1 text-[#C8A45C]">
+                      {[...Array(t.rating)].map((_, rIdx) => (
+                        <Star key={rIdx} className="w-4 h-4 fill-current" />
+                      ))}
+                    </div>
+                    <p className="text-xs text-neutral-300 italic leading-relaxed">
+                      "{t.text}"
+                    </p>
+                  </div>
+                  <div className="pt-3 border-t border-neutral-800/80">
+                    <h4 className="text-xs font-bold text-white">{t.name}</h4>
+                    <span className="text-[10px] text-neutral-500">{t.role}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
