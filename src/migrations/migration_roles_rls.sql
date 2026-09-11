@@ -19,7 +19,7 @@ BEGIN
   user_email := LOWER(COALESCE(NEW.email, ''));
 
   -- Asignación estricta de roles específicos
-  IF user_email = 'enzocostareyes@gmail.com' THEN
+  IF user_email IN ('enzocostareyes@gmail.com', 'spaacicaladosbarbershop@gmail.com') THEN
     assigned_role := 'admin';
   ELSIF user_email = 'spaicort@gmail.com' THEN
     assigned_role := 'recepcionista';
@@ -68,7 +68,7 @@ CREATE TRIGGER on_auth_user_created
 UPDATE public.profiles
 SET role = 'admin'
 WHERE id IN (
-  SELECT id FROM auth.users WHERE LOWER(email) = 'enzocostareyes@gmail.com'
+  SELECT id FROM auth.users WHERE LOWER(email) IN ('enzocostareyes@gmail.com', 'spaacicaladosbarbershop@gmail.com')
 );
 
 -- Rol Recepcionista
@@ -82,7 +82,7 @@ WHERE id IN (
 UPDATE public.profiles
 SET role = 'cliente'
 WHERE id NOT IN (
-  SELECT id FROM auth.users WHERE LOWER(email) IN ('enzocostareyes@gmail.com', 'spaicort@gmail.com')
+  SELECT id FROM auth.users WHERE LOWER(email) IN ('enzocostareyes@gmail.com', 'spaacicaladosbarbershop@gmail.com', 'spaicort@gmail.com')
 );
 
 -- 3. FUNCIONES HELPER Y PERMISOS DE ESQUEMA
