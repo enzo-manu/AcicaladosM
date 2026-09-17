@@ -72,10 +72,19 @@ export const PublicBookingFlow: React.FC = () => {
 
   // Client Details
   const [clientName, setClientName] = useState<string>(currentUser.role === 'cliente' ? currentUser.name : '');
-  const [clientPhone, setClientPhone] = useState<string>(currentUser.role === 'cliente' ? '988445566' : '');
+  const [clientPhone, setClientPhone] = useState<string>(currentUser.role === 'cliente' ? (currentUser.phone || '') : '');
   const [clientEmail, setClientEmail] = useState<string>(currentUser.role === 'cliente' ? currentUser.email : '');
-  const [clientDni, setClientDni] = useState<string>('72891402');
+  const [clientDni, setClientDni] = useState<string>(currentUser.role === 'cliente' ? (currentUser.dni || '') : '');
   const [notes, setNotes] = useState<string>('');
+
+  useEffect(() => {
+    if (currentUser.role === 'cliente') {
+      if (currentUser.name) setClientName(currentUser.name);
+      if (currentUser.email) setClientEmail(currentUser.email);
+      if (currentUser.phone) setClientPhone(currentUser.phone);
+      if (currentUser.dni) setClientDni(currentUser.dni);
+    }
+  }, [currentUser]);
   const [bookingFormError, setBookingFormError] = useState<string | null>(null);
 
   // Generated Booking Result

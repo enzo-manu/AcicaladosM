@@ -49,6 +49,8 @@ interface AppContextType {
     email: string;
     avatar: string;
     role: UserRole;
+    phone?: string;
+    dni?: string;
   };
   signOut: () => Promise<void>;
 
@@ -212,6 +214,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     email: string;
     avatar: string;
     role: UserRole;
+    phone?: string;
+    dni?: string;
   } | null>(null);
 
   const activeView = activeViewState;
@@ -394,11 +398,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 6. Reservas
-      const { data: dbBookings } = await supabase
+      let bookingsQuery = supabase
         .from('bookings')
         .select('*, booking_services(*)')
         .order('created_at', { ascending: false });
-      if (dbBookings && dbBookings.length > 0) {
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentAuthUser = sessionData?.session?.user;
+
+      if (currentAuthUser) {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', currentAuthUser.id)
+          .maybeSingle();
+        const role = userProfile?.role || 'cliente';
+        if (role === 'cliente') {
+          if (currentAuthUser.email) {
+            bookingsQuery = bookingsQuery.or(`user_id.eq.${currentAuthUser.id},client_email.eq.${currentAuthUser.email}`);
+          } else {
+            bookingsQuery = bookingsQuery.eq('user_id', currentAuthUser.id);
+          }
+        }
+      } else {
+        // Usuario no autenticado: no exponer reservas ajenas
+        bookingsQuery = bookingsQuery.eq('user_id', '00000000-0000-0000-0000-000000000000');
+      }
+
+      const { data: dbBookings, error: bookingsError } = await bookingsQuery;
+      if (!bookingsError && dbBookings) {
         setBookings(
           dbBookings.map((b: any) => ({
             id: b.id,
@@ -664,7 +692,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               session.user.user_metadata?.avatar_url ||
               'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
             role,
+            phone: sanitizePhone(profile?.phone || '') || '',
+            dni: sanitizeDni(profile?.dni || '') || '',
           });
+          fetchAllFromSupabase();
         } catch (err) {
           console.warn('Sincronización de perfil de auth completada con fallbacks:', err);
         }
@@ -685,13 +716,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         setCurrentRoleState('anon');
         setCurrentUserOverride(null);
+        setBookings([]);
+        fetchAllFromSupabase();
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchAllFromSupabase]);
 
   // Perfil del usuario sincronizado estrictamente con la sesión real de Supabase
   const currentUser = useMemo(() => {
@@ -704,6 +737,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       email: '',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       role: 'anon' as UserRole,
+      phone: '',
+      dni: '',
     };
   }, [currentUserOverride]);
 
@@ -715,6 +750,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setCurrentUserOverride(null);
     setCurrentRoleState('anon');
+    setBookings([]);
     setActiveView('/');
   }, [setActiveView]);
 
@@ -811,10 +847,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const totalPrice = bookingData.total_price_cents || 0;
         const balance = Math.max(0, totalPrice - advanceAmount);
 
+        const authUid =
+          currentUserOverride?.id && currentUserOverride.id.includes('-')
+            ? currentUserOverride.id
+            : (await supabase.auth.getSession()).data.session?.user?.id || null;
+
         const { data: insertedBooking, error } = await supabase
           .from('bookings')
           .insert({
             booking_code: randomCode,
+            user_id: authUid,
             client_first_name: firstName,
             client_last_name: lastName,
             client_phone: sanitizePhone(bookingData.client_phone) || null,
