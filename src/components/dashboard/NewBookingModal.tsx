@@ -113,9 +113,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return services.filter((s) => selectedServiceIds.includes(s.id));
   }, [services, selectedServiceIds]);
 
-  // Cálculo total de duración y precio
+  // Cálculo de duración máxima simultánea y precio total sumado
+  // Al realizarse los servicios en paralelo, la duración total de estadía del cliente equivale al servicio que más demore.
   const totalDurationMinutes = useMemo(() => {
-    return selectedServicesList.reduce((acc, s) => acc + (s.duration_minutes || 30), 0);
+    if (selectedServicesList.length === 0) return 0;
+    return Math.max(...selectedServicesList.map((s) => s.duration_minutes || 30));
   }, [selectedServicesList]);
 
   const totalPriceCents = useMemo(() => {
@@ -124,7 +126,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
   const totalPriceSoles = totalPriceCents / 100;
 
-  // Hora de fin calculada
+  // Hora de fin calculada de la cita (momento en que concluye el servicio más largo)
   const calculatedEndTime = useMemo(() => {
     const startMin = timeToMinutes(startTime);
     const endMin = startMin + totalDurationMinutes;
@@ -199,15 +201,15 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return workloads;
   }, [availableEmployeesList, bookings, date]);
 
-  // Programación secuencial de cada servicio seleccionado
+  // Programación simultánea (paralela) de cada servicio seleccionado:
+  // Todos inician exactamente a la misma hora base (startTime), y cada uno finaliza según su propia duración
   const scheduledServices = useMemo(() => {
-    let currentStartMin = timeToMinutes(startTime);
+    const baseStartMin = timeToMinutes(startTime);
     return selectedServicesList.map((srv, index) => {
       const duration = srv.duration_minutes || 30;
-      const endMin = currentStartMin + duration;
-      const srvStartStr = minutesToTime(currentStartMin);
+      const endMin = baseStartMin + duration;
+      const srvStartStr = startTime;
       const srvEndStr = minutesToTime(endMin);
-      currentStartMin = endMin;
       return {
         service: srv,
         index,
@@ -218,17 +220,26 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     });
   }, [selectedServicesList, startTime]);
 
-  // Asignación automática óptima independiente por cada servicio
+  // Asignación automática óptima independiente por cada servicio en paralelo
+  // Procura asignar especialistas distintos para servicios que se ejecutan simultáneamente
   const autoAssignedByService = useMemo(() => {
     const result: Record<string, Employee | null> = {};
+    const assignedIds = new Set<string>();
 
     for (const item of scheduledServices) {
       const srv = item.service;
       const eligible = getEligibleEmployeesForService(srv, availableEmployeesList);
       const candidates = eligible.length > 0 ? eligible : availableEmployeesList;
 
-      // Ordenar por disponibilidad en el intervalo específico del servicio y menor carga laboral
+      // Ordenar priorizando:
+      // 1. Que no esté ya asignado a otro servicio simultáneo en esta cita
+      // 2. Disponibilidad en tiempo real en la franja [item.startTime, item.endTime]
+      // 3. Menor carga laboral del día
       const sorted = [...candidates].sort((a, b) => {
+        const aAssigned = assignedIds.has(a.id) ? 1 : 0;
+        const bAssigned = assignedIds.has(b.id) ? 1 : 0;
+        if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+
         const aAvail = checkEmployeeAvailability({
           employee: a,
           date,
@@ -254,7 +265,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         return aLoad - bLoad;
       });
 
-      result[srv.id] = sorted[0] || null;
+      const chosen = sorted[0] || null;
+      result[srv.id] = chosen;
+      if (chosen) {
+        assignedIds.add(chosen.id);
+      }
     }
 
     return result;
@@ -352,12 +367,33 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     });
   }, [assignmentMode, scheduledServices, getEffectiveEmployeeForService, getServiceAvailability]);
 
+  // Control de colisión simultánea: Detectar si el mismo especialista fue asignado a 2 o más servicios en paralelo
+  const duplicateSpecialistCollisions = useMemo(() => {
+    const usage: Record<string, { employee: Employee; serviceNames: string[] }> = {};
+
+    for (const item of scheduledServices) {
+      const emp = getEffectiveEmployeeForService(item.service.id);
+      if (emp) {
+        if (!usage[emp.id]) {
+          usage[emp.id] = { employee: emp, serviceNames: [item.service.name] };
+        } else {
+          usage[emp.id].serviceNames.push(item.service.name);
+        }
+      }
+    }
+
+    return Object.values(usage).filter((u) => u.serviceNames.length > 1);
+  }, [scheduledServices, getEffectiveEmployeeForService]);
+
+  const hasDuplicateCollision = duplicateSpecialistCollisions.length > 0;
+
   // Botón Submit habilitado/deshabilitado
   const canSubmit = useMemo(() => {
     if (!clientName.trim()) return false;
     if (selectedServicesList.length === 0) return false;
     if (!allServicesAssigned) return false;
     if (hasAvailabilityConflict) return false;
+    if (hasDuplicateCollision) return false;
     if (paymentType === 'completo' && isMixto && !isMixtoSumValid) return false;
     if (paymentType === 'adelanto' && !isAdvanceAmountValid) return false;
     return true;
@@ -366,6 +402,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     selectedServicesList,
     allServicesAssigned,
     hasAvailabilityConflict,
+    hasDuplicateCollision,
     paymentType,
     isMixto,
     isMixtoSumValid,
@@ -392,6 +429,14 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
     if (!allServicesAssigned) {
       setSubmitError('Hay servicios seleccionados que no tienen especialista asignado.');
+      return;
+    }
+
+    if (hasDuplicateCollision) {
+      const firstCol = duplicateSpecialistCollisions[0];
+      setSubmitError(
+        `Conflicto de asignación simultánea: ${firstCol.employee.full_name} fue asignado/a a ${firstCol.serviceNames.length} servicios simultáneos ("${firstCol.serviceNames.join('" y "')}"). Una persona no puede realizar dos atenciones a la vez a las ${startTime}. Asigne especialistas diferentes.`
+      );
       return;
     }
 
@@ -812,7 +857,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-neutral-400 text-xs font-mono">
-                    Duración: <strong className="text-white">{totalDurationMinutes} min</strong>
+                    Estadía cliente: <strong className="text-white">{totalDurationMinutes} min</strong>
                   </span>
                   <span className="text-[#C8A45C] text-sm font-bold font-mono">
                     Total: {formatSoles(totalPriceCents)}
@@ -827,10 +872,18 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5">
               <h4 className="font-serif-luxury text-sm font-bold text-[#E6C875] flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#C8A45C]" />
-                <span>3. Horario & Asignación de Especialista por Servicio</span>
+                <span>3. Horario & Asignación de Especialista por Servicio (Atención Simultánea)</span>
               </h4>
               <span className="text-[10px] text-neutral-400 font-mono">
-                Total: {totalDurationMinutes} min (Fin aprox: {calculatedEndTime})
+                Estadía máxima: {totalDurationMinutes} min (Fin: {calculatedEndTime})
+              </span>
+            </div>
+
+            {/* Banner explicativo de atención simultánea */}
+            <div className="p-2.5 rounded-xl bg-[#C8A45C]/10 border border-[#C8A45C]/30 text-[#E6C875] text-[11px] flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#C8A45C]" />
+              <span>
+                <strong>Atención en Paralelo:</strong> Todos los servicios inician a las <strong>{startTime}</strong> de forma simultánea, atendidos por su respectivo especialista. La estadía del cliente equivale al servicio que más demore ({totalDurationMinutes} min).
               </span>
             </div>
 
@@ -854,7 +907,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               <div className="space-y-1">
                 <label className="text-neutral-300 font-medium flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-[#C8A45C]" />
-                  <span>Hora de Inicio de la Cita</span>
+                  <span>Hora de Inicio de la Cita (Simultánea)</span>
                 </label>
                 <input
                   type="time"
@@ -866,6 +919,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Alerta de Colisión por Especialista Duplicado */}
+            {hasDuplicateCollision && (
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/50 text-amber-200 flex items-start gap-2.5 text-xs animate-fadeIn">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <strong className="block text-amber-300">Conflicto: Especialista asignado a múltiples servicios simultáneos</strong>
+                  {duplicateSpecialistCollisions.map((col, cIdx) => (
+                    <span key={cIdx} className="block text-[11px] text-amber-200/90">
+                      • <strong>{col.employee.full_name}</strong> está asignado/a a {col.serviceNames.length} servicios al mismo tiempo: <em>{col.serviceNames.join(', ')}</em>. Asigne especialistas diferentes para cada servicio.
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Selector de Modo de Asignación */}
             <div className="space-y-2 pt-1">
@@ -900,7 +968,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       Asignación Automática Inteligente
                     </span>
                     <span className="text-[10px] text-neutral-400 leading-snug block mt-0.5">
-                      Asigna automáticamente a un barbero para barbería y a una esteticista para spa según disponibilidad y menor carga.
+                      Asigna automáticamente especialistas calificados diferentes por servicio según disponibilidad en tiempo real.
                     </span>
                   </div>
                 </button>
@@ -936,12 +1004,12 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-white flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-[#C8A45C]" />
-                  <span>Especialistas Asignados por Servicio ({scheduledServices.length}):</span>
+                  <span>Especialistas por Servicio Simultáneo ({scheduledServices.length}):</span>
                 </span>
                 <span className="text-[10px] text-neutral-400">
                   {bookingCategoryType === 'mixto'
-                    ? '⚡ Barbería y Spa se atienden por especialistas distintos'
-                    : 'Cada servicio tiene su propio horario y especialista'}
+                    ? '⚡ Barbería y Spa atendidos por especialistas independientes'
+                    : 'Cada servicio tiene su propio especialista asignado'}
                 </span>
               </div>
 
@@ -952,11 +1020,18 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 const eligibleEmps = getEligibleEmployeesForService(srv, availableEmployeesList);
                 const candidates = eligibleEmps.length > 0 ? eligibleEmps : availableEmployeesList;
                 const isSpa = srv.category === 'spa';
+                const isDuplicate = assignedEmp
+                  ? duplicateSpecialistCollisions.some((col) => col.employee.id === assignedEmp.id)
+                  : false;
 
                 return (
                   <div
                     key={srv.id}
-                    className="p-3.5 sm:p-4 rounded-xl bg-[#161616] border border-neutral-800/90 hover:border-[#C8A45C]/30 transition space-y-3"
+                    className={`p-3.5 sm:p-4 rounded-xl bg-[#161616] border transition space-y-3 ${
+                      isDuplicate
+                        ? 'border-amber-500/60 bg-amber-950/10'
+                        : 'border-neutral-800/90 hover:border-[#C8A45C]/30'
+                    }`}
                   >
                     {/* Header de la tarjeta del servicio */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/70 pb-2.5">
@@ -1019,7 +1094,11 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                               [srv.id]: e.target.value,
                             }));
                           }}
-                          className="w-full bg-[#1a1a1a] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl p-2.5 outline-none text-xs"
+                          className={`w-full bg-[#1a1a1a] border text-white rounded-xl p-2.5 outline-none text-xs ${
+                            isDuplicate
+                              ? 'border-amber-500/80 focus:border-amber-400'
+                              : 'border-neutral-800 focus:border-[#C8A45C]'
+                          }`}
                         >
                           {candidates.map((emp) => {
                             const empAvail = checkEmployeeAvailability({
@@ -1078,8 +1157,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       </div>
                     )}
 
+                    {/* Alerta de Colisión Directa si el mismo especialista fue elegido para 2+ servicios simultáneos */}
+                    {isDuplicate && (
+                      <div className="px-3 py-2 rounded-lg bg-amber-950/50 border border-amber-500/50 text-amber-200 flex items-start gap-2 text-[11px] animate-fadeIn">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold block text-amber-300">Colisión: Especialista ya asignado en esta cita</span>
+                          <span className="text-[10px] text-amber-200/90 leading-snug">
+                            <strong>{assignedEmp?.full_name}</strong> ya está asignado/a a otro servicio simultáneo que inicia a las {item.startTime}. Una persona no puede atender dos servicios al mismo tiempo.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Estado de Disponibilidad en Tiempo Real para este servicio */}
-                    {assignedEmp && (
+                    {assignedEmp && !isDuplicate && (
                       <div>
                         {availStatus.isAvailable ? (
                           <div className="px-3 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-emerald-300 flex items-center gap-2 text-[11px]">
@@ -1412,7 +1504,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   }
                 </strong>
                 {' · '}
-                Horario: <strong className="text-white font-mono">{startTime} a {calculatedEndTime}</strong>
+                Horario Simultáneo: <strong className="text-white font-mono">{startTime} a {calculatedEndTime}</strong>
+                <span className="text-neutral-500 font-mono text-[10px]"> (Estadía máx: {totalDurationMinutes} min)</span>
               </div>
             </div>
 
