@@ -37,6 +37,7 @@ import {
 } from '../data/initialData';
 import { sanitizePhone, sanitizeDni } from '../lib/validators';
 import { supabase } from '../lib/supabase/client';
+import { timeToMinutes, minutesToTime } from '../lib/bookingAvailability';
 
 interface AppContextType {
   // Navigation & Role
@@ -111,6 +112,7 @@ interface AppContextType {
   ) => void;
   voidPayment: (paymentId: string, reason: string) => void;
   liberateServiceEarly: (bookingId: string, serviceIndex: number) => void;
+  reassignBookingService: (bookingId: string, serviceIndex: number, newEmployeeId: string, newEmployeeName: string) => Promise<void>;
   deleteBooking: (bookingId: string) => Promise<boolean>;
   editBooking: (bookingId: string, updates: Partial<Booking>) => Promise<boolean>;
 
@@ -442,13 +444,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             services: b.booking_services ? b.booking_services.map((bs: any) => {
               const assignedEmpId = bs.assigned_employee_id || b.assigned_employee_id || '';
               const assignedEmpName = empMap.get(assignedEmpId) || 'Especialista';
+              const srvStart = (bs.hora_inicio || bs.start_time || b.start_time)?.substring(0, 5) || '10:00';
+              const srvDuration = bs.duration_minutes || 30;
+              const calcEnd = minutesToTime(timeToMinutes(srvStart) + srvDuration);
+              const rawEnd = (bs.hora_fin || bs.end_time)?.substring(0, 5) || calcEnd;
+              // Si el fin guardado excede la duración del servicio (arrastró fin global de la reserva), usar duración real
+              const effectiveEnd = (timeToMinutes(rawEnd) - timeToMinutes(srvStart) > srvDuration + 5) ? calcEnd : rawEnd;
               return {
+                id: bs.id,
                 service_id: bs.service_id || '',
                 service_name: bs.service_name,
                 employee_id: assignedEmpId,
                 employee_name: assignedEmpName,
                 price_cents: bs.service_price_cents,
-                duration_minutes: bs.duration_minutes,
+                duration_minutes: srvDuration,
+                hora_inicio: srvStart,
+                hora_fin: effectiveEnd,
+                start_time: srvStart,
+                end_time: effectiveEnd,
                 liberado_at: bs.liberado_at || undefined,
               };
             }) : [],
@@ -813,8 +826,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const today = getTodayDateString();
     const randomCode = `AC-${Math.floor(1000 + Math.random() * 9000)}`;
     const newId = `bk-${Date.now()}`;
+    const sanitizedServices = (bookingData.services || []).map((srv) => {
+      const srvStart = (srv.hora_inicio || srv.start_time || bookingData.start_time)?.substring(0, 5) || '10:00';
+      const srvDuration = srv.duration_minutes || 30;
+      const calcEnd = minutesToTime(timeToMinutes(srvStart) + srvDuration);
+      const rawEnd = (srv.hora_fin || srv.end_time)?.substring(0, 5) || calcEnd;
+      const effectiveEnd = (timeToMinutes(rawEnd) - timeToMinutes(srvStart) > srvDuration + 5) ? calcEnd : rawEnd;
+      return {
+        ...srv,
+        hora_inicio: srvStart,
+        hora_fin: effectiveEnd,
+        start_time: srvStart,
+        end_time: effectiveEnd,
+        duration_minutes: srvDuration,
+      };
+    });
+
     const newBooking: Booking = {
       ...bookingData,
+      services: sanitizedServices,
       id: newId,
       code: randomCode,
       created_at: `${today}T12:00:00Z`,
@@ -905,15 +935,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   ? srvEmp.id
                   : safeEmployeeId;
 
-              const srvHoraInicio = srv.hora_inicio || srv.start_time || bookingData.start_time;
-              const srvHoraFin = srv.hora_fin || srv.end_time || bookingData.end_time;
+              const srvHoraInicio = (srv.hora_inicio || srv.start_time || bookingData.start_time)?.substring(0, 5) || '10:00';
+              const srvDuration = srv.duration_minutes || 30;
+              const calcFin = minutesToTime(timeToMinutes(srvHoraInicio) + srvDuration);
+              const rawFin = (srv.hora_fin || srv.end_time)?.substring(0, 5) || calcFin;
+              const srvHoraFin = (timeToMinutes(rawFin) - timeToMinutes(srvHoraInicio) > srvDuration + 5) ? calcFin : rawFin;
 
               return {
                 booking_id: insertedBooking.id,
                 service_id: srvId,
                 service_name: srv.service_name,
                 service_price_cents: srv.price_cents,
-                duration_minutes: srv.duration_minutes,
+                duration_minutes: srvDuration,
                 assigned_employee_id: srvEmpId,
                 hora_inicio: srvHoraInicio,
                 hora_fin: srvHoraFin,
@@ -1180,6 +1213,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
     }
   }, [pulseRealtime]);
+
+  const reassignBookingService = useCallback(
+    async (bookingId: string, serviceIndex: number, newEmployeeId: string, newEmployeeName: string) => {
+      // 1. Actualización optimista en estado local de React
+      setBookings((prev) =>
+        prev.map((b) => {
+          if (b.id === bookingId) {
+            const updatedServices = [...(b.services || [])];
+            if (updatedServices[serviceIndex]) {
+              updatedServices[serviceIndex] = {
+                ...updatedServices[serviceIndex],
+                employee_id: newEmployeeId,
+                employee_name: newEmployeeName,
+              };
+            }
+            return {
+              ...b,
+              services: updatedServices,
+              ...(serviceIndex === 0 ? { assigned_employee_id: newEmployeeId } : {}),
+            };
+          }
+          return b;
+        })
+      );
+      pulseRealtime();
+
+      // 2. Persistencia en Supabase
+      if (bookingId.includes('-') && bookingId.length === 36) {
+        try {
+          const currentBooking = bookings.find((b) => b.id === bookingId);
+          const serviceRow = currentBooking?.services?.[serviceIndex];
+          const serviceRowId = serviceRow?.id;
+
+          if (serviceRowId && serviceRowId.includes('-') && serviceRowId.length === 36) {
+            await supabase
+              .from('booking_services')
+              .update({ assigned_employee_id: newEmployeeId })
+              .eq('id', serviceRowId);
+          } else {
+            const { data: dbServices } = await supabase
+              .from('booking_services')
+              .select('id')
+              .eq('booking_id', bookingId)
+              .order('created_at', { ascending: true });
+
+            if (dbServices && dbServices[serviceIndex]) {
+              await supabase
+                .from('booking_services')
+                .update({ assigned_employee_id: newEmployeeId })
+                .eq('id', dbServices[serviceIndex].id);
+            }
+          }
+
+          if (serviceIndex === 0) {
+            await supabase
+              .from('bookings')
+              .update({ assigned_employee_id: newEmployeeId })
+              .eq('id', bookingId);
+          }
+
+          pulseRealtime();
+        } catch (err) {
+          console.error('Error al reasignar especialista en Supabase:', err);
+        }
+      }
+    },
+    [bookings, pulseRealtime]
+  );
 
   const deleteBooking = useCallback(async (bookingId: string): Promise<boolean> => {
     // 1. Verificación estricta de rol Administrador
@@ -2495,6 +2596,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerBookingPayment,
         voidPayment,
         liberateServiceEarly,
+        reassignBookingService,
         deleteBooking,
         editBooking,
         registerVentaMostrador,

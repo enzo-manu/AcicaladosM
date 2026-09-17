@@ -152,36 +152,58 @@ export const CalendarioView: React.FC = () => {
   const allEvents = useMemo(() => {
     const events: CalendarEvent[] = [];
 
-    // 1. Process bookings
+    // 1. Process bookings at service-specialist level
     bookings.forEach((b) => {
-      const primaryService = b.services && b.services.length > 0 ? b.services[0] : null;
-      let specialistName = primaryService?.employee_name || '';
+      if (b.services && b.services.length > 0) {
+        b.services.forEach((srv, idx) => {
+          let specialistName = srv.employee_name || '';
+          if (!specialistName || specialistName === 'Especialista') {
+            const emp = employees.find(
+              (e) => e.id === (srv.employee_id || (b as any).assigned_employee_id)
+            );
+            specialistName = emp ? emp.full_name : 'Especialista';
+          }
+          const specialistId = srv.employee_id || (b as any).assigned_employee_id || '';
+          const srvStart = srv.start_time || srv.hora_inicio || b.start_time?.substring(0, 5) || '10:00';
+          const srvEnd = srv.end_time || srv.hora_fin || b.end_time?.substring(0, 5) || '11:00';
 
-      // If generic or missing, find specialist in employees list
-      if (!specialistName || specialistName === 'Especialista') {
-        const emp = employees.find(
-          (e) => e.id === (primaryService?.employee_id || (b as any).assigned_employee_id)
-        );
-        specialistName = emp ? emp.full_name : 'Especialista';
+          events.push({
+            id: `booking-${b.id}-${srv.service_id || idx}`,
+            type: 'reserva',
+            date: b.date,
+            time: srvStart,
+            endTime: srvEnd,
+            specialist: specialistName,
+            specialistId: specialistId,
+            client: b.client_name,
+            label: 'Cita',
+            serviceName: srv.service_name || 'Servicio',
+            status: b.status,
+            priceCents: srv.price_cents || b.total_price_cents,
+            rawBooking: b,
+          });
+        });
+      } else {
+        const specialistId = (b as any).assigned_employee_id || '';
+        const emp = employees.find((e) => e.id === specialistId);
+        const specialistName = emp ? emp.full_name : 'Especialista';
+
+        events.push({
+          id: `booking-${b.id}`,
+          type: 'reserva',
+          date: b.date,
+          time: b.start_time?.substring(0, 5) || '10:00',
+          endTime: b.end_time?.substring(0, 5) || '11:00',
+          specialist: specialistName,
+          specialistId: specialistId,
+          client: b.client_name,
+          label: 'Cita',
+          serviceName: 'Servicio Programado',
+          status: b.status,
+          priceCents: b.total_price_cents,
+          rawBooking: b,
+        });
       }
-
-      const specialistId = primaryService?.employee_id || (b as any).assigned_employee_id || '';
-
-      events.push({
-        id: `booking-${b.id}`,
-        type: 'reserva',
-        date: b.date,
-        time: b.start_time?.substring(0, 5) || '10:00',
-        endTime: b.end_time?.substring(0, 5) || '11:00',
-        specialist: specialistName,
-        specialistId: specialistId,
-        client: b.client_name,
-        label: 'Cita',
-        serviceName: primaryService?.service_name || 'Servicio',
-        status: b.status,
-        priceCents: b.total_price_cents,
-        rawBooking: b,
-      });
     });
 
     // 2. Process real Supabase employee_blocks

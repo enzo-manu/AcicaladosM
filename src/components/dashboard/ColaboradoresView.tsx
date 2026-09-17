@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Employee, Service, EmployeeBlock } from '../../types';
+import { Employee, Service, EmployeeBlock, EmployeeAppointmentItem } from '../../types';
+import { timeToMinutes, minutesToTime } from '../../lib/bookingAvailability';
 import {
   Users,
   Plus,
@@ -220,6 +221,43 @@ export const ColaboradoresView: React.FC = () => {
   const [appointmentsDateFilter, setAppointmentsDateFilter] = useState<string>(() => {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
   });
+  const [dbAppointments, setDbAppointments] = useState<EmployeeAppointmentItem[] | null>(null);
+  const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+
+  // Cargar citas específicas a nivel de servicio desde RPC de Supabase
+  useEffect(() => {
+    if (!appointmentsEmp) {
+      setDbAppointments(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAgenda = async () => {
+      setIsLoadingAppointments(true);
+      try {
+        const { data, error } = await supabase.rpc('get_employee_agenda', {
+          p_employee_id: appointmentsEmp.id,
+          p_date: appointmentsDateFilter || null,
+        });
+
+        if (!error && data && isMounted) {
+          setDbAppointments(data as EmployeeAppointmentItem[]);
+        }
+      } catch (err) {
+        console.error('Error fetching employee agenda via RPC:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingAppointments(false);
+        }
+      }
+    };
+
+    fetchAgenda();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appointmentsEmp, appointmentsDateFilter]);
 
   // Today string America/Lima
   const todayLima = useMemo(() => {
@@ -576,18 +614,84 @@ export const ColaboradoresView: React.FC = () => {
     }
   };
 
-  // Filtered assigned appointments for selected employee
-  const assignedBookingsForDate = useMemo(() => {
+  // Citas y servicios asignados a nivel de ítem independiente para el colaborador
+  const inMemoryAppointments = useMemo((): EmployeeAppointmentItem[] => {
     if (!appointmentsEmp) return [];
-    return (bookings || []).filter((b) => {
-      if (b.date !== appointmentsDateFilter) return false;
-      const hasAssignedService = (b.services || []).some(
+    const items: EmployeeAppointmentItem[] = [];
+
+    (bookings || []).forEach((b) => {
+      if (b.date !== appointmentsDateFilter) return;
+      if (b.status === 'cancelada' || b.status === 'expirada') return;
+
+      const matchingServices = (b.services || []).filter(
         (s) => s.employee_id === appointmentsEmp.id
       );
-      const isDirectlyAssigned = (b as any).assigned_employee_id === appointmentsEmp.id;
-      return hasAssignedService || isDirectlyAssigned;
+
+      // Si el colaborador tiene asignados servicios específicos dentro de la reserva
+      if (matchingServices.length > 0) {
+        matchingServices.forEach((s) => {
+          const catalogSrv = services.find((cs) => cs.id === s.service_id || cs.name === s.service_name);
+          const priceCents = s.price_cents || catalogSrv?.price_cents || 0;
+          const durationMinutes = s.duration_minutes || catalogSrv?.duration_minutes || 30;
+          const srvStart = (s.hora_inicio || s.start_time || b.start_time)?.substring(0, 5) || '10:00';
+          const srvEnd = minutesToTime(timeToMinutes(srvStart) + durationMinutes);
+
+          items.push({
+            id: s.id || `${b.id}-${s.service_id || Math.random()}`,
+            booking_id: b.id,
+            booking_code: b.code,
+            client_name: b.client_name,
+            client_phone: b.client_phone,
+            client_email: b.client_email,
+            booking_date: b.date,
+            service_id: s.service_id,
+            service_name: s.service_name,
+            service_price_cents: priceCents,
+            duration_minutes: durationMinutes,
+            start_time: srvStart,
+            end_time: srvEnd,
+            status: b.status,
+            payment_status: b.payment_status,
+          });
+        });
+      } else if ((b as any).assigned_employee_id === appointmentsEmp.id) {
+        // Fallback cuando la reserva no detalló servicios y fue asignada a nivel global
+        const primarySrv = b.services?.[0];
+        const catalogSrv = primarySrv ? services.find((cs) => cs.id === primarySrv.service_id || cs.name === primarySrv.service_name) : null;
+        const durationMinutes = primarySrv?.duration_minutes || catalogSrv?.duration_minutes || 30;
+        const srvStart = b.start_time?.substring(0, 5) || '10:00';
+        const srvEnd = minutesToTime(timeToMinutes(srvStart) + durationMinutes);
+
+        items.push({
+          id: `${b.id}-general`,
+          booking_id: b.id,
+          booking_code: b.code,
+          client_name: b.client_name,
+          client_phone: b.client_phone,
+          client_email: b.client_email,
+          booking_date: b.date,
+          service_id: primarySrv?.service_id || '',
+          service_name: primarySrv?.service_name || 'Servicio Programado',
+          service_price_cents: primarySrv?.price_cents || catalogSrv?.price_cents || b.total_price_cents,
+          duration_minutes: durationMinutes,
+          start_time: srvStart,
+          end_time: srvEnd,
+          status: b.status,
+          payment_status: b.payment_status,
+        });
+      }
     });
-  }, [bookings, appointmentsEmp, appointmentsDateFilter]);
+
+    return items.sort((a, b) => a.start_time.localeCompare(b.start_time));
+  }, [bookings, appointmentsEmp, appointmentsDateFilter, services]);
+
+  // Selección de origen: datos de RPC de Supabase con fallback reactivo en memoria
+  const assignedAppointmentsForDate = useMemo(() => {
+    if (dbAppointments !== null) {
+      return dbAppointments;
+    }
+    return inMemoryAppointments;
+  }, [dbAppointments, inMemoryAppointments]);
 
   return (
     <div className="space-y-6 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -2105,77 +2209,91 @@ export const ColaboradoresView: React.FC = () => {
               </div>
 
               {/* Daily summary badges */}
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
-                  <span className="text-[10px] text-neutral-500 block">Total en fecha</span>
+                  <span className="text-[10px] text-neutral-500 block">Total Servicios</span>
                   <span className="font-bold text-white text-base font-serif-luxury">
-                    {assignedBookingsForDate.length}
+                    {assignedAppointmentsForDate.length}
                   </span>
                 </div>
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
                   <span className="text-[10px] text-neutral-500 block">Confirmadas</span>
                   <span className="font-bold text-emerald-400 text-base font-serif-luxury">
-                    {assignedBookingsForDate.filter((b) => b.status === 'confirmada').length}
+                    {assignedAppointmentsForDate.filter((b) => b.status === 'confirmada').length}
                   </span>
                 </div>
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
                   <span className="text-[10px] text-neutral-500 block">Pendientes</span>
                   <span className="font-bold text-amber-400 text-base font-serif-luxury">
-                    {assignedBookingsForDate.filter((b) => b.status === 'pendiente').length}
+                    {assignedAppointmentsForDate.filter((b) => b.status === 'pendiente').length}
+                  </span>
+                </div>
+                <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
+                  <span className="text-[10px] text-neutral-500 block">Producción Día</span>
+                  <span className="font-bold text-[#E6C875] text-base font-serif-luxury">
+                    S/ {(assignedAppointmentsForDate.reduce((acc, it) => acc + (it.service_price_cents || 0), 0) / 100).toFixed(2)}
                   </span>
                 </div>
               </div>
 
               {/* Appointments List */}
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                {assignedBookingsForDate.length > 0 ? (
-                  assignedBookingsForDate.map((booking) => (
+                {assignedAppointmentsForDate.length > 0 ? (
+                  assignedAppointmentsForDate.map((item) => (
                     <div
-                      key={booking.id}
+                      key={item.id}
                       className="bg-[#181818] border border-neutral-800 rounded-xl p-3.5 space-y-2 text-xs hover:border-[#C8A45C]/40 transition"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-[#E6C875] bg-[#C8A45C]/10 border border-[#C8A45C]/20 px-2 py-0.5 rounded text-[11px]">
-                            {booking.start_time} - {booking.end_time}
+                            {item.start_time} - {item.end_time}
                           </span>
                           <span className="font-semibold text-white text-sm">
-                            {booking.client_name}
+                            {item.client_name}
                           </span>
+                          {item.booking_code && (
+                            <span className="text-[10px] font-mono text-neutral-500 hidden sm:inline">
+                              ({item.booking_code})
+                            </span>
+                          )}
                         </div>
 
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                            booking.status === 'confirmada'
+                            item.status === 'confirmada'
                               ? 'badge-success'
-                              : booking.status === 'pendiente'
+                              : item.status === 'pendiente'
                               ? 'badge-warning'
-                              : booking.status === 'completada'
+                              : item.status === 'completada'
                               ? 'badge-info'
                               : 'badge-neutral'
                           }`}
                         >
-                          {booking.status}
+                          {item.status}
                         </span>
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-neutral-400 pt-1 border-t border-neutral-850">
-                        <div>
-                          <span className="text-neutral-500">Servicios: </span>
-                          <span className="text-neutral-200">
-                            {booking.services?.map((s) => s.service_name).join(', ') || 'Servicio programado'}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Servicio: </span>
+                          <span className="text-neutral-200 font-medium">
+                            {item.service_name}
+                          </span>
+                          <span className="text-neutral-500 font-mono text-[10px]">
+                            ({item.duration_minutes} min)
                           </span>
                         </div>
 
                         <div className="flex items-center gap-3">
-                          {booking.client_phone && (
+                          {item.client_phone && (
                             <span className="text-neutral-400 flex items-center gap-1 font-mono">
                               <Phone className="w-3 h-3 text-[#C8A45C]" />
-                              {booking.client_phone}
+                              {item.client_phone}
                             </span>
                           )}
                           <span className="font-bold text-white">
-                            Total: S/ {(booking.total_price_cents / 100).toFixed(2)}
+                            Monto: S/ {(item.service_price_cents / 100).toFixed(2)}
                           </span>
                         </div>
                       </div>

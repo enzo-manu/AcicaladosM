@@ -1308,6 +1308,29 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: undefined
       }
+      get_employee_agenda: {
+        Args: {
+          p_employee_id: string
+          p_date?: string | null
+        }
+        Returns: {
+          id: string
+          booking_id: string
+          booking_code: string
+          client_name: string
+          client_phone: string
+          client_email: string
+          booking_date: string
+          service_id: string
+          service_name: string
+          service_price_cents: number
+          duration_minutes: number
+          start_time: string
+          end_time: string
+          status: string
+          payment_status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

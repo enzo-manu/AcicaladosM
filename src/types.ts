@@ -125,6 +125,7 @@ export interface EmployeeBlock {
 }
 
 export interface BookingServiceItem {
+  id?: string;
   service_id: string;
   service_name: string;
   employee_id: string;
@@ -136,6 +137,24 @@ export interface BookingServiceItem {
   start_time?: string; // HH:mm
   end_time?: string; // HH:mm
   liberado_at?: string; // If service finished early
+}
+
+export interface EmployeeAppointmentItem {
+  id: string;
+  booking_id: string;
+  booking_code: string;
+  client_name: string;
+  client_phone: string;
+  client_email?: string;
+  booking_date: string;
+  service_id: string;
+  service_name: string;
+  service_price_cents: number;
+  duration_minutes: number;
+  start_time: string; // HH:mm
+  end_time: string;   // HH:mm (strictly start_time + duration_minutes)
+  status: BookingStatus | string;
+  payment_status?: PaymentStatus | string;
 }
 
 export type BookingStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'expirada';

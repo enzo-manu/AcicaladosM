@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Booking, BookingStatus, formatSoles, formatLimaDate, PaymentLog, Service, Employee } from '../../types';
+import { Booking, BookingStatus, formatSoles, formatLimaDate, PaymentLog, Service, Employee, EmployeeBlock, BookingServiceItem } from '../../types';
 import { getTodayDateString } from '../../data/initialData';
+import { isEmployeeBlocked, isEmployeeBooked, timeToMinutes, minutesToTime } from '../../lib/bookingAvailability';
 import {
   BookOpen,
   Plus,
@@ -31,6 +32,243 @@ import {
 } from '../../lib/validators';
 import { NewBookingModal } from './NewBookingModal';
 
+interface ServiceSpecialistSelectorProps {
+  booking: Booking;
+  service: BookingServiceItem;
+  serviceIndex: number;
+  employees: Employee[];
+  services: Service[];
+  bookings: Booking[];
+  employeeBlocks: EmployeeBlock[];
+  onReassign: (bookingId: string, serviceIndex: number, employeeId: string, employeeName: string) => Promise<void>;
+}
+
+const ServiceSpecialistSelector: React.FC<ServiceSpecialistSelectorProps> = ({
+  booking,
+  service,
+  serviceIndex,
+  employees,
+  services,
+  bookings,
+  employeeBlocks,
+  onReassign,
+}) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 1. Determinar categoría del servicio
+  const catalogSrv = useMemo(() => {
+    return services.find(
+      (s) => s.id === service.service_id || s.name.toLowerCase() === service.service_name.toLowerCase()
+    );
+  }, [services, service.service_id, service.service_name]);
+
+  const category = useMemo(() => {
+    return catalogSrv?.category || (booking.type === 'spa' ? 'spa' : 'barberia');
+  }, [catalogSrv, booking.type]);
+
+  // 2. Filtrar candidatos obligatoriamente por categoría (Barbería vs Spa)
+  const candidateOptions = useMemo(() => {
+    const eligibleEmployees = employees.filter((emp) => {
+      if (!emp.active) return false;
+      if (emp.type === 'recepcionista' || emp.role === 'recepcionista') return false;
+      if (category === 'barberia') {
+        return emp.type === 'barbero' || emp.type === 'barberia';
+      }
+      if (category === 'spa') {
+        return (
+          emp.type === 'spa' ||
+          emp.type === 'terapeuta_spa' ||
+          emp.type === 'masajista' ||
+          emp.type === 'cosmiatra' ||
+          emp.type === 'estilista'
+        );
+      }
+      return true;
+    });
+
+    // Garantizar que el especialista actual figure siempre en la lista
+    if (service.employee_id && !eligibleEmployees.some((e) => e.id === service.employee_id)) {
+      const currentAssigned = employees.find((e) => e.id === service.employee_id);
+      if (currentAssigned) eligibleEmployees.push(currentAssigned);
+    }
+
+    const srvStart = (service.hora_inicio || service.start_time || booking.start_time)?.substring(0, 5) || '10:00';
+    const duration = service.duration_minutes || catalogSrv?.duration_minutes || 30;
+    const startMin = timeToMinutes(srvStart);
+    const endMin = startMin + duration;
+
+    const options = eligibleEmployees.map((emp) => {
+      const isCurrent = emp.id === service.employee_id;
+
+      // 1. Bloqueo o permiso aprobado
+      const isBlocked = isEmployeeBlocked(emp.id, booking.date, startMin, endMin, employeeBlocks);
+      if (isBlocked) {
+        return {
+          emp,
+          isAvailable: false,
+          label: `🔴 ${emp.full_name} — Ocupado (En permiso/ausencia)`,
+          isCurrent,
+        };
+      }
+
+      // 2. Conflicto en otro servicio simultáneo de la misma reserva
+      const conflictSameBooking = (booking.services || []).some((otherSrv, idx) => {
+        if (idx === serviceIndex) return false;
+        if (otherSrv.employee_id !== emp.id) return false;
+        const otherStart = timeToMinutes(otherSrv.hora_inicio || otherSrv.start_time || booking.start_time);
+        const otherDuration = otherSrv.duration_minutes || 30;
+        const otherEnd = otherStart + otherDuration;
+        return startMin < otherEnd && endMin > otherStart;
+      });
+
+      if (conflictSameBooking) {
+        return {
+          emp,
+          isAvailable: false,
+          label: `🔴 ${emp.full_name} — Ocupado (En otro servicio de esta cita)`,
+          isCurrent,
+        };
+      }
+
+      // 3. Conflicto en otras reservas activas
+      const otherBookings = (bookings || []).filter((b) => b.id !== booking.id);
+      const isBookedElsewhere = isEmployeeBooked(emp.id, booking.date, startMin, endMin, otherBookings);
+      if (isBookedElsewhere) {
+        return {
+          emp,
+          isAvailable: false,
+          label: `🔴 ${emp.full_name} — Ocupado (Tiene otra cita)`,
+          isCurrent,
+        };
+      }
+
+      // 4. Disponible o asignado actual
+      if (isCurrent) {
+        return {
+          emp,
+          isAvailable: true,
+          label: `🟢 ${emp.full_name} — Asignado actual`,
+          isCurrent,
+        };
+      }
+
+      return {
+        emp,
+        isAvailable: true,
+        label: `🟢 ${emp.full_name} — Disponible`,
+        isCurrent,
+      };
+    });
+
+    // Ordenar priorizando: 1. Asignado actual, 2. Disponibles, 3. Ocupados
+    return options.sort((a, b) => {
+      if (a.isCurrent) return -1;
+      if (b.isCurrent) return 1;
+      if (a.isAvailable && !b.isAvailable) return -1;
+      if (!a.isAvailable && b.isAvailable) return 1;
+      return a.emp.full_name.localeCompare(b.emp.full_name);
+    });
+  }, [
+    employees,
+    category,
+    service.employee_id,
+    service.hora_inicio,
+    service.start_time,
+    service.duration_minutes,
+    booking.start_time,
+    booking.date,
+    booking.id,
+    booking.services,
+    catalogSrv?.duration_minutes,
+    employeeBlocks,
+    serviceIndex,
+    bookings,
+  ]);
+
+  const srvStart = (service.hora_inicio || service.start_time || booking.start_time)?.substring(0, 5) || '10:00';
+  const duration = service.duration_minutes || catalogSrv?.duration_minutes || 30;
+  const srvEnd = (service.hora_fin || service.end_time)?.substring(0, 5) || minutesToTime(timeToMinutes(srvStart) + duration);
+
+  const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newEmpId = e.target.value;
+    if (!newEmpId || newEmpId === service.employee_id) return;
+
+    const chosenOption = candidateOptions.find((opt) => opt.emp.id === newEmpId);
+    if (!chosenOption) return;
+
+    if (!chosenOption.isAvailable && !chosenOption.isCurrent) {
+      const confirmOverride = window.confirm(
+        `El especialista ${chosenOption.emp.full_name} figura como ocupado en ese horario. ¿Deseas reasignarlo de todas formas?`
+      );
+      if (!confirmOverride) return;
+    }
+
+    try {
+      setIsSaving(true);
+      await onReassign(booking.id, serviceIndex, chosenOption.emp.id, chosenOption.emp.full_name);
+    } catch (err) {
+      console.error('Error reasignando especialista:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <span className="font-semibold text-white block text-xs">
+        {service.service_name}
+      </span>
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-neutral-400 font-medium shrink-0">
+            Especialista:
+          </span>
+          <div className="relative inline-flex items-center">
+            <select
+              value={service.employee_id || ''}
+              disabled={isSaving}
+              onChange={handleChange}
+              className="bg-[#121212] border border-[#C8A45C]/35 hover:border-[#C8A45C] focus:border-[#C8A45C] text-[#E6C875] text-[11px] font-semibold rounded-lg px-2.5 py-1 outline-none transition cursor-pointer pr-7 appearance-none shadow-sm disabled:opacity-50"
+              title="Reasignar especialista para este servicio"
+            >
+              <option value="" disabled className="bg-[#141414] text-neutral-400">
+                -- Seleccionar ({category === 'barberia' ? 'Barbería' : 'Spa'}) --
+              </option>
+              {candidateOptions.map((opt) => (
+                <option
+                  key={opt.emp.id}
+                  value={opt.emp.id}
+                  disabled={!opt.isAvailable && !opt.isCurrent}
+                  className={`bg-[#141414] py-1 ${
+                    opt.isCurrent
+                      ? 'text-[#E6C875] font-bold'
+                      : opt.isAvailable
+                      ? 'text-emerald-400'
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-[#C8A45C] absolute right-2 pointer-events-none" />
+          </div>
+          {isSaving && (
+            <span className="text-[10px] text-[#C8A45C] animate-pulse font-medium">
+              Guardando...
+            </span>
+          )}
+        </div>
+
+        <span className="text-[10px] text-neutral-400">
+          • Duración: <span className="text-neutral-200 font-medium">{duration} min</span> ({srvStart} - {srvEnd})
+        </span>
+      </div>
+    </div>
+  );
+};
+
 export const ReservasManager: React.FC = () => {
   const {
     bookings,
@@ -45,6 +283,7 @@ export const ReservasManager: React.FC = () => {
     voidPayment,
     updateBookingStatus,
     liberateServiceEarly,
+    reassignBookingService,
     deleteBooking,
     editBooking,
     addBooking,
@@ -581,7 +820,7 @@ export const ReservasManager: React.FC = () => {
                                   Detalle de Servicios Individuales & Asignación de Especialistas
                                 </span>
                                 <span className="text-[11px] text-neutral-400">
-                                  Puedes liberar a un especialista si concluye la atención antes del horario previsto.
+                                  Reasigna especialistas en tiempo real con validación de disponibilidad o libera al personal al culminar.
                                 </span>
                               </div>
 
@@ -591,14 +830,16 @@ export const ReservasManager: React.FC = () => {
                                     key={sIdx}
                                     className="p-3 rounded-lg bg-[#181818] border border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs"
                                   >
-                                    <div>
-                                      <span className="font-semibold text-white block">
-                                        {srv.service_name}
-                                      </span>
-                                      <span className="text-[10px] text-neutral-400">
-                                        Colaborador: <span className="text-neutral-200 font-medium">{srv.employee_name}</span> • Duración: {srv.duration_minutes} min
-                                      </span>
-                                    </div>
+                                    <ServiceSpecialistSelector
+                                      booking={b}
+                                      service={srv}
+                                      serviceIndex={sIdx}
+                                      employees={employees}
+                                      services={services}
+                                      bookings={bookings}
+                                      employeeBlocks={employeeBlocks}
+                                      onReassign={reassignBookingService}
+                                    />
 
                                     <div className="flex items-center gap-3">
                                       <span className="font-bold text-[#E6C875]">

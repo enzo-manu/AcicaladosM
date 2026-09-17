@@ -198,29 +198,28 @@ export function isEmployeeBooked(
     if (b.date !== date) return false;
     if (b.status === 'cancelada' || b.status === 'expirada') return false;
 
-    // Verificar si el colaborador está asignado a nivel de reserva general
+    // Verificar si el colaborador está asignado a nivel de algún servicio específico
+    const matchingServices = b.services?.filter((s) => s.employee_id === empId) || [];
     const isMainAssigned = (b as any).assigned_employee_id === empId;
 
-    // Verificar si el colaborador está asignado a nivel de algún servicio específico
-    const matchingService = b.services?.find((s) => s.employee_id === empId);
-
-    if (!isMainAssigned && !matchingService) return false;
-
-    // Si el servicio tiene horario individual asignado
-    if (matchingService && (matchingService.hora_inicio || matchingService.start_time)) {
-      const sStart = timeToMinutes(
-        matchingService.hora_inicio || matchingService.start_time || b.start_time
-      );
-      const sEnd = timeToMinutes(
-        matchingService.hora_fin || matchingService.end_time || b.end_time
-      );
-      return startMin < sEnd && endMin > sStart;
+    if (matchingServices.length > 0) {
+      // Bloqueo de tiempo estricto: fin = inicio + duración de SU servicio particular
+      return matchingServices.some((s) => {
+        const sStart = timeToMinutes(s.hora_inicio || s.start_time || b.start_time);
+        const duration = s.duration_minutes || (timeToMinutes(b.end_time) - timeToMinutes(b.start_time));
+        const sEnd = sStart + duration;
+        return startMin < sEnd && endMin > sStart;
+      });
     }
 
-    // Intervalo general de la reserva
-    const bStart = timeToMinutes(b.start_time);
-    const bEnd = timeToMinutes(b.end_time);
-    return startMin < bEnd && endMin > bStart;
+    if (isMainAssigned) {
+      // Fallback solo cuando la asignación fue global sin detalle de servicios
+      const bStart = timeToMinutes(b.start_time);
+      const bEnd = timeToMinutes(b.end_time);
+      return startMin < bEnd && endMin > bStart;
+    }
+
+    return false;
   });
 }
 
@@ -523,35 +522,55 @@ export function checkEmployeeAvailability(params: {
   }
 
   // 3. Validar citas agendadas que solapen
+  let conflictingBookingDetails: { code?: string; start_time: string; end_time: string } | null = null;
   const bookingConflict = (bookings || []).find((b) => {
     if (b.date !== date) return false;
     if (b.status === 'cancelada' || b.status === 'expirada') return false;
 
+    const matchingServices = b.services?.filter((s) => s.employee_id === employee.id) || [];
     const isMainAssigned = (b as any).assigned_employee_id === employee.id;
-    const matchingService = b.services?.find((s) => s.employee_id === employee.id);
 
-    if (!isMainAssigned && !matchingService) return false;
-
-    if (matchingService && (matchingService.hora_inicio || matchingService.start_time)) {
-      const sStart = timeToMinutes(
-        matchingService.hora_inicio || matchingService.start_time || b.start_time
-      );
-      const sEnd = timeToMinutes(
-        matchingService.hora_fin || matchingService.end_time || b.end_time
-      );
-      return startMin < sEnd && endMin > sStart;
+    if (matchingServices.length > 0) {
+      const match = matchingServices.find((s) => {
+        const sStart = timeToMinutes(s.hora_inicio || s.start_time || b.start_time);
+        const duration = s.duration_minutes || (timeToMinutes(b.end_time) - timeToMinutes(b.start_time));
+        const sEnd = sStart + duration;
+        return startMin < sEnd && endMin > sStart;
+      });
+      if (match) {
+        const sStart = timeToMinutes(match.hora_inicio || match.start_time || b.start_time);
+        const duration = match.duration_minutes || (timeToMinutes(b.end_time) - timeToMinutes(b.start_time));
+        conflictingBookingDetails = {
+          code: b.code,
+          start_time: minutesToTime(sStart),
+          end_time: minutesToTime(sStart + duration),
+        };
+        return true;
+      }
+      return false;
     }
 
-    const bStart = timeToMinutes(b.start_time);
-    const bEnd = timeToMinutes(b.end_time);
-    return startMin < bEnd && endMin > bStart;
+    if (isMainAssigned) {
+      const bStart = timeToMinutes(b.start_time);
+      const bEnd = timeToMinutes(b.end_time);
+      if (startMin < bEnd && endMin > bStart) {
+        conflictingBookingDetails = {
+          code: b.code,
+          start_time: b.start_time,
+          end_time: b.end_time,
+        };
+        return true;
+      }
+    }
+
+    return false;
   });
 
-  if (bookingConflict) {
+  if (bookingConflict && conflictingBookingDetails) {
     return {
       isAvailable: false,
       reason: 'cita_solapada',
-      message: `Cita ya reservada (${bookingConflict.code || 'Cita'}: ${bookingConflict.start_time} - ${bookingConflict.end_time})`,
+      message: `Cita ya reservada (${conflictingBookingDetails.code || 'Cita'}: ${conflictingBookingDetails.start_time} - ${conflictingBookingDetails.end_time})`,
       conflictingBooking: bookingConflict,
     };
   }
