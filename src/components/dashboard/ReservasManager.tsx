@@ -385,9 +385,9 @@ export const ReservasManager: React.FC = () => {
                 <th className="py-3.5 px-4 text-right">Total</th>
                 <th className="py-3.5 px-4 text-right">Cobrado</th>
                 <th className="py-3.5 px-4 text-right">Saldo</th>
-                <th className="py-3.5 px-4 text-center">Estado Cita</th>
-                <th className="py-3.5 px-4 text-center">Estado Pago</th>
-                <th className="py-3.5 px-4 text-right">Acciones</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap min-w-[110px]">Estado Cita</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap min-w-[140px]">Estado Pago</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[180px]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/60">
@@ -455,11 +455,11 @@ export const ReservasManager: React.FC = () => {
                         </td>
 
                         {/* Booking Status Badge */}
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
                           <select
                             value={b.status}
                             onChange={(e) => updateBookingStatus(b.id, e.target.value as BookingStatus)}
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer outline-none ${
+                            className={`inline-flex items-center justify-center text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer outline-none whitespace-nowrap ${
                               b.status === 'confirmada'
                                 ? 'badge-success'
                                 : b.status === 'completada'
@@ -477,9 +477,9 @@ export const ReservasManager: React.FC = () => {
                         </td>
 
                         {/* Payment Status Badge */}
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
                           <span
-                            className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded ${
+                            className={`inline-flex items-center justify-center text-center whitespace-nowrap text-[9px] uppercase font-bold px-2.5 py-0.5 rounded-md ${
                               b.payment_status === 'total'
                                 ? 'badge-success'
                                 : b.payment_status === 'parcial'
@@ -496,7 +496,7 @@ export const ReservasManager: React.FC = () => {
                         </td>
 
                         {/* Actions */}
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
                             {/* Pay Button */}
                             <button

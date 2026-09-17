@@ -295,7 +295,7 @@ export const DashboardHome: React.FC = () => {
                           {formatSoles(b.total_price_cents)}
                         </span>
                         <span
-                          className={`text-[9px] uppercase font-bold px-1.5 py-0.2 rounded inline-block ${
+                          className={`inline-flex items-center justify-center text-center whitespace-nowrap text-[9px] uppercase font-bold px-2 py-0.5 rounded-md ${
                             b.payment_status === 'total'
                               ? 'badge-success'
                               : b.payment_status === 'parcial'
