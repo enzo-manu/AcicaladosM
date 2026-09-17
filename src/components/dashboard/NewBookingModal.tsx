@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Service, Employee, formatSoles, BusinessCategory } from '../../types';
 import { getTodayDateString } from '../../data/initialData';
@@ -73,7 +73,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [date, setDate] = useState(todayStr);
   const [startTime, setStartTime] = useState('11:00');
   const [assignmentMode, setAssignmentMode] = useState<'auto' | 'manual'>('auto');
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [serviceAssignments, setServiceAssignments] = useState<Record<string, string>>({});
 
   // 4. Modalidades y Métodos de Pago
   const [paymentType, setPaymentType] = useState<'sin_pago' | 'completo' | 'adelanto'>('sin_pago');
@@ -105,14 +105,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
           setSelectedServiceIds([firstActive.id]);
         }
       }
-      if (!selectedEmployeeId && employees.length > 0) {
-        const firstActiveEmp = employees.find((e) => e.active && e.type !== 'recepcionista');
-        if (firstActiveEmp) {
-          setSelectedEmployeeId(firstActiveEmp.id);
-        }
-      }
     }
-  }, [isOpen, services, employees]);
+  }, [isOpen, services]);
 
   // Servicios seleccionados completos
   const selectedServicesList = useMemo(() => {
@@ -205,69 +199,100 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return workloads;
   }, [availableEmployeesList, bookings, date]);
 
-  // Evaluación de disponibilidad en tiempo real para todos los colaboradores
-  const availabilityMap = useMemo(() => {
-    const map: Record<string, ReturnType<typeof checkEmployeeAvailability>> = {};
-    for (const emp of availableEmployeesList) {
-      map[emp.id] = checkEmployeeAvailability({
+  // Programación secuencial de cada servicio seleccionado
+  const scheduledServices = useMemo(() => {
+    let currentStartMin = timeToMinutes(startTime);
+    return selectedServicesList.map((srv, index) => {
+      const duration = srv.duration_minutes || 30;
+      const endMin = currentStartMin + duration;
+      const srvStartStr = minutesToTime(currentStartMin);
+      const srvEndStr = minutesToTime(endMin);
+      currentStartMin = endMin;
+      return {
+        service: srv,
+        index,
+        startTime: srvStartStr,
+        endTime: srvEndStr,
+        durationMinutes: duration,
+      };
+    });
+  }, [selectedServicesList, startTime]);
+
+  // Asignación automática óptima independiente por cada servicio
+  const autoAssignedByService = useMemo(() => {
+    const result: Record<string, Employee | null> = {};
+
+    for (const item of scheduledServices) {
+      const srv = item.service;
+      const eligible = getEligibleEmployeesForService(srv, availableEmployeesList);
+      const candidates = eligible.length > 0 ? eligible : availableEmployeesList;
+
+      // Ordenar por disponibilidad en el intervalo específico del servicio y menor carga laboral
+      const sorted = [...candidates].sort((a, b) => {
+        const aAvail = checkEmployeeAvailability({
+          employee: a,
+          date,
+          startTime: item.startTime,
+          durationMinutes: item.durationMinutes,
+          bookings,
+          employeeBlocks,
+        }).isAvailable ? 1 : 0;
+
+        const bAvail = checkEmployeeAvailability({
+          employee: b,
+          date,
+          startTime: item.startTime,
+          durationMinutes: item.durationMinutes,
+          bookings,
+          employeeBlocks,
+        }).isAvailable ? 1 : 0;
+
+        if (aAvail !== bAvail) return bAvail - aAvail;
+
+        const aLoad = employeeWorkloads[a.id] || 0;
+        const bLoad = employeeWorkloads[b.id] || 0;
+        return aLoad - bLoad;
+      });
+
+      result[srv.id] = sorted[0] || null;
+    }
+
+    return result;
+  }, [scheduledServices, availableEmployeesList, date, bookings, employeeBlocks, employeeWorkloads]);
+
+  // Colaborador efectivo asignado a cada servicio
+  const getEffectiveEmployeeForService = useCallback(
+    (serviceId: string): Employee | null => {
+      if (assignmentMode === 'auto') {
+        return autoAssignedByService[serviceId] || null;
+      }
+      const manualEmpId = serviceAssignments[serviceId];
+      if (manualEmpId) {
+        const found = availableEmployeesList.find((e) => e.id === manualEmpId);
+        if (found) return found;
+      }
+      return autoAssignedByService[serviceId] || null;
+    },
+    [assignmentMode, autoAssignedByService, serviceAssignments, availableEmployeesList]
+  );
+
+  // Consulta de disponibilidad de un colaborador para un servicio determinado
+  const getServiceAvailability = useCallback(
+    (item: { service: Service; startTime: string; durationMinutes: number }, emp: Employee | null) => {
+      if (!emp) {
+        return { isAvailable: false, message: 'No hay especialista asignado' };
+      }
+      return checkEmployeeAvailability({
         employee: emp,
         date,
-        startTime,
-        durationMinutes: totalDurationMinutes > 0 ? totalDurationMinutes : 30,
+        startTime: item.startTime,
+        durationMinutes: item.durationMinutes,
         bookings,
         employeeBlocks,
       });
-    }
-    return map;
-  }, [availableEmployeesList, date, startTime, totalDurationMinutes, bookings, employeeBlocks]);
-
-  // Selección automática del mejor especialista
-  const autoAssignedEmployee = useMemo((): Employee | null => {
-    if (availableEmployeesList.length === 0) return null;
-
-    // 1. Filtrar los aptos para la categoría de servicios
-    const eligible = availableEmployeesList.filter((emp) => {
-      // Si todos son barbería o todos spa, validar coincidencia
-      if (bookingCategoryType === 'barberia' && emp.type !== 'barbero' && emp.type !== 'barberia') {
-        return false;
-      }
-      if (bookingCategoryType === 'spa' && emp.type !== 'spa') {
-        return false;
-      }
-      return true;
-    });
-
-    const candidates = eligible.length > 0 ? eligible : availableEmployeesList;
-
-    // 2. Ordenar por disponibilidad (disponibles primero) y menor carga laboral
-    const sorted = [...candidates].sort((a, b) => {
-      const aAvail = availabilityMap[a.id]?.isAvailable ? 1 : 0;
-      const bAvail = availabilityMap[b.id]?.isAvailable ? 1 : 0;
-      if (aAvail !== bAvail) return bAvail - aAvail;
-
-      const aLoad = employeeWorkloads[a.id] || 0;
-      const bLoad = employeeWorkloads[b.id] || 0;
-      return aLoad - bLoad;
-    });
-
-    return sorted[0] || null;
-  }, [availableEmployeesList, bookingCategoryType, availabilityMap, employeeWorkloads]);
-
-  // Colaborador efectivo a asignar
-  const effectiveEmployee = useMemo((): Employee | null => {
-    if (assignmentMode === 'auto') {
-      return autoAssignedEmployee;
-    }
-    return availableEmployeesList.find((e) => e.id === selectedEmployeeId) || null;
-  }, [assignmentMode, autoAssignedEmployee, availableEmployeesList, selectedEmployeeId]);
-
-  // Estado de disponibilidad del colaborador seleccionado
-  const effectiveAvailability = useMemo(() => {
-    if (!effectiveEmployee) {
-      return { isAvailable: false, message: 'No hay especialista asignado' };
-    }
-    return availabilityMap[effectiveEmployee.id] || { isAvailable: true };
-  }, [effectiveEmployee, availabilityMap]);
+    },
+    [date, bookings, employeeBlocks]
+  );
 
   // Manejo de importes en Pago Mixto
   useEffect(() => {
@@ -308,21 +333,39 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return advanceAmountNum > 0 && advanceAmountNum <= totalPriceSoles;
   }, [paymentType, advanceAmountNum, totalPriceSoles]);
 
+  // Verificación de asignación completa y sin conflictos
+  const allServicesAssigned = useMemo(() => {
+    if (scheduledServices.length === 0) return false;
+    return scheduledServices.every((item) => {
+      const emp = getEffectiveEmployeeForService(item.service.id);
+      return emp !== null;
+    });
+  }, [scheduledServices, getEffectiveEmployeeForService]);
+
+  const hasAvailabilityConflict = useMemo(() => {
+    if (assignmentMode !== 'manual') return false;
+    return scheduledServices.some((item) => {
+      const emp = getEffectiveEmployeeForService(item.service.id);
+      if (!emp) return true;
+      const avail = getServiceAvailability(item, emp);
+      return !avail.isAvailable;
+    });
+  }, [assignmentMode, scheduledServices, getEffectiveEmployeeForService, getServiceAvailability]);
+
   // Botón Submit habilitado/deshabilitado
   const canSubmit = useMemo(() => {
     if (!clientName.trim()) return false;
     if (selectedServicesList.length === 0) return false;
-    if (!effectiveEmployee) return false;
-    if (assignmentMode === 'manual' && !effectiveAvailability.isAvailable) return false;
+    if (!allServicesAssigned) return false;
+    if (hasAvailabilityConflict) return false;
     if (paymentType === 'completo' && isMixto && !isMixtoSumValid) return false;
     if (paymentType === 'adelanto' && !isAdvanceAmountValid) return false;
     return true;
   }, [
     clientName,
     selectedServicesList,
-    effectiveEmployee,
-    assignmentMode,
-    effectiveAvailability,
+    allServicesAssigned,
+    hasAvailabilityConflict,
     paymentType,
     isMixto,
     isMixtoSumValid,
@@ -347,15 +390,26 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       return;
     }
 
-    if (!effectiveEmployee) {
-      setSubmitError('No se pudo asignar un especialista para este servicio.');
+    if (!allServicesAssigned) {
+      setSubmitError('Hay servicios seleccionados que no tienen especialista asignado.');
       return;
     }
 
-    if (assignmentMode === 'manual' && !effectiveAvailability.isAvailable) {
-      setSubmitError(
-        `El colaborador seleccionado no está disponible: ${effectiveAvailability.message}`
-      );
+    if (assignmentMode === 'manual' && hasAvailabilityConflict) {
+      const conflictItem = scheduledServices.find((item) => {
+        const emp = getEffectiveEmployeeForService(item.service.id);
+        if (!emp) return true;
+        return !getServiceAvailability(item, emp).isAvailable;
+      });
+      if (conflictItem) {
+        const emp = getEffectiveEmployeeForService(conflictItem.service.id);
+        const avail = getServiceAvailability(conflictItem, emp);
+        setSubmitError(
+          `Conflicto en "${conflictItem.service.name}": ${emp?.full_name || 'Especialista'} no está disponible (${avail.message || 'Horario ocupado'}).`
+        );
+      } else {
+        setSubmitError('Uno o más especialistas seleccionados tienen conflicto de horario.');
+      }
       return;
     }
 
@@ -420,27 +474,25 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         paymentNotes = `Adelanto Recepción (${singleMethod.toUpperCase()})`;
       }
 
-      // 2. Construir ítems de servicio
-      let currentItemStartMin = timeToMinutes(startTime);
-      const serviceItems = selectedServicesList.map((srv) => {
-        const srvDuration = srv.duration_minutes || 30;
-        const srvEndMin = currentItemStartMin + srvDuration;
-        const srvStartStr = minutesToTime(currentItemStartMin);
-        const srvEndStr = minutesToTime(srvEndMin);
-
-        currentItemStartMin = srvEndMin;
+      // 2. Construir ítems de servicio con especialista independiente por cada uno
+      const serviceItems = scheduledServices.map((item) => {
+        const srv = item.service;
+        const assignedEmp = getEffectiveEmployeeForService(srv.id);
+        if (!assignedEmp) {
+          throw new Error(`No se pudo asignar especialista para el servicio: ${srv.name}`);
+        }
 
         return {
           service_id: srv.id,
           service_name: srv.name,
-          employee_id: effectiveEmployee.id,
-          employee_name: effectiveEmployee.full_name,
+          employee_id: assignedEmp.id,
+          employee_name: assignedEmp.full_name,
           price_cents: srv.price_cents,
-          duration_minutes: srvDuration,
-          hora_inicio: srvStartStr,
-          hora_fin: srvEndStr,
-          start_time: srvStartStr,
-          end_time: srvEndStr,
+          duration_minutes: item.durationMinutes,
+          hora_inicio: item.startTime,
+          hora_fin: item.endTime,
+          start_time: item.startTime,
+          end_time: item.endTime,
         };
       });
 
@@ -471,6 +523,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setClientPhone('');
       setClientDni('');
       setSelectedServiceIds(services[0]?.id ? [services[0].id] : []);
+      setServiceAssignments({});
       setPaymentType('sin_pago');
       setIsMixto(false);
       setAdvanceAmountInput('');
@@ -769,19 +822,19 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             )}
           </div>
 
-          {/* SECCIÓN 3: FECHA, HORA Y ASIGNACIÓN CON VERIFICACIÓN EN TIEMPO REAL */}
-          <div className="space-y-3">
+          {/* SECCIÓN 3: FECHA, HORARIO Y ASIGNACIÓN DE ESPECIALISTAS POR SERVICIO */}
+          <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5">
               <h4 className="font-serif-luxury text-sm font-bold text-[#E6C875] flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#C8A45C]" />
-                <span>3. Horario & Asignación de Especialista</span>
+                <Calendar className="w-4 h-4 text-[#C8A45C]" />
+                <span>3. Horario & Asignación de Especialista por Servicio</span>
               </h4>
               <span className="text-[10px] text-neutral-400 font-mono">
-                {startTime} - {calculatedEndTime} ({totalDurationMinutes} min)
+                Total: {totalDurationMinutes} min (Fin aprox: {calculatedEndTime})
               </span>
             </div>
 
-            {/* Fecha y Hora de Inicio */}
+            {/* Fecha y Hora de Inicio General */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-neutral-300 font-medium flex items-center gap-1.5">
@@ -791,8 +844,8 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 <input
                   type="date"
                   required
-                  min={todayStr}
                   value={date}
+                  min={todayStr}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C]/70 text-white rounded-xl p-2.5 outline-none font-mono"
                 />
@@ -801,7 +854,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               <div className="space-y-1">
                 <label className="text-neutral-300 font-medium flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-[#C8A45C]" />
-                  <span>Hora de Inicio</span>
+                  <span>Hora de Inicio de la Cita</span>
                 </label>
                 <input
                   type="time"
@@ -814,11 +867,18 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               </div>
             </div>
 
-            {/* Modo de Asignación */}
+            {/* Selector de Modo de Asignación */}
             <div className="space-y-2 pt-1">
-              <label className="text-neutral-300 font-medium block">
-                Modo de Asignación del Personal
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-neutral-300 font-medium block">
+                  Modo de Asignación del Personal
+                </label>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {bookingCategoryType === 'mixto'
+                    ? 'Reserva Mixta (Barbería + Spa)'
+                    : `Reserva ${bookingCategoryType.toUpperCase()}`}
+                </span>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
@@ -837,10 +897,10 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   />
                   <div>
                     <span className="font-semibold text-xs block text-white">
-                      Asignación Automática
+                      Asignación Automática Inteligente
                     </span>
                     <span className="text-[10px] text-neutral-400 leading-snug block mt-0.5">
-                      Distribuye equitativamente según menor carga y disponibilidad inmediata.
+                      Asigna automáticamente a un barbero para barbería y a una esteticista para spa según disponibilidad y menor carga.
                     </span>
                   </div>
                 </button>
@@ -861,87 +921,190 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                   />
                   <div>
                     <span className="font-semibold text-xs block text-white">
-                      Asignación Manual
+                      Asignación Manual por Servicio
                     </span>
                     <span className="text-[10px] text-neutral-400 leading-snug block mt-0.5">
-                      Selecciona directamente al colaborador preferido para esta reserva.
+                      Elige de forma independiente al colaborador calificado para cada servicio seleccionado.
                     </span>
                   </div>
                 </button>
               </div>
             </div>
 
-            {/* Selector de Especialista en Modo Manual */}
-            {assignmentMode === 'manual' && (
-              <div className="space-y-1.5 pt-1">
-                <label className="text-neutral-300 font-medium">
-                  Especialista Seleccionado
-                </label>
-                <select
-                  value={selectedEmployeeId}
-                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                  className="w-full bg-[#181818] border border-neutral-800 focus:border-[#C8A45C]/70 text-white rounded-xl p-2.5 outline-none"
-                >
-                  {availableEmployeesList.map((emp) => {
-                    const statusInfo = availabilityMap[emp.id];
-                    const isAvail = statusInfo?.isAvailable;
-                    const load = employeeWorkloads[emp.id] || 0;
-                    return (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name} ({emp.type}) — {isAvail ? '🟢 Disponible' : `🔴 Ocupado (${statusInfo?.message || 'No disponible'})`} — {load} cita{load === 1 ? '' : 's'} hoy
-                      </option>
-                    );
-                  })}
-                </select>
+            {/* TARJETAS DE ASIGNACIÓN INDEPENDIENTE POR CADA SERVICIO */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-[#C8A45C]" />
+                  <span>Especialistas Asignados por Servicio ({scheduledServices.length}):</span>
+                </span>
+                <span className="text-[10px] text-neutral-400">
+                  {bookingCategoryType === 'mixto'
+                    ? '⚡ Barbería y Spa se atienden por especialistas distintos'
+                    : 'Cada servicio tiene su propio horario y especialista'}
+                </span>
               </div>
-            )}
 
-            {/* ALERTA PREVENTIVA EN TIEMPO REAL: Estado del Colaborador Asignado */}
-            {effectiveEmployee && (
-              <div className="pt-1">
-                {effectiveAvailability.isAvailable ? (
-                  <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <div>
-                        <span className="font-semibold text-xs block text-emerald-200">
-                          {effectiveEmployee.full_name} — Disponible
+              {scheduledServices.map((item) => {
+                const srv = item.service;
+                const assignedEmp = getEffectiveEmployeeForService(srv.id);
+                const availStatus = getServiceAvailability(item, assignedEmp);
+                const eligibleEmps = getEligibleEmployeesForService(srv, availableEmployeesList);
+                const candidates = eligibleEmps.length > 0 ? eligibleEmps : availableEmployeesList;
+                const isSpa = srv.category === 'spa';
+
+                return (
+                  <div
+                    key={srv.id}
+                    className="p-3.5 sm:p-4 rounded-xl bg-[#161616] border border-neutral-800/90 hover:border-[#C8A45C]/30 transition space-y-3"
+                  >
+                    {/* Header de la tarjeta del servicio */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/70 pb-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                            isSpa
+                              ? 'bg-purple-950/70 border border-purple-800/60 text-purple-300'
+                              : 'bg-[#C8A45C]/20 border border-[#C8A45C]/40 text-[#E6C875]'
+                          }`}
+                        >
+                          {item.index + 1}
                         </span>
-                        <span className="text-[10px] text-emerald-400/80 block font-mono">
-                          {startTime} a {calculatedEndTime} ({totalDurationMinutes} min) · Carga del día: {employeeWorkloads[effectiveEmployee.id] || 0} cita(s)
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-white block">
+                              {srv.name}
+                            </span>
+                            <span
+                              className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                                isSpa
+                                  ? 'bg-purple-950/60 text-purple-300 border border-purple-800/40'
+                                  : 'bg-[#C8A45C]/20 text-[#E6C875] border border-[#C8A45C]/40'
+                              }`}
+                            >
+                              {isSpa ? 'Spa / Estética' : 'Barbería'}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            ⏱️ {item.startTime} a {item.endTime} ({item.durationMinutes} min)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <span className="text-xs font-bold text-[#E6C875]">
+                          {formatSoles(srv.price_cents)}
                         </span>
                       </div>
                     </div>
-                    {assignmentMode === 'auto' && (
-                      <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-900/60 border border-emerald-400/30 text-emerald-300 shrink-0">
-                        Auto-Asignado
-                      </span>
+
+                    {/* Selector o Vista de Asignación */}
+                    {assignmentMode === 'manual' ? (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <label className="text-neutral-300 font-medium flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5 text-[#C8A45C]" />
+                            <span>Seleccionar Especialista para este Servicio:</span>
+                          </label>
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            {candidates.length} colaborador{candidates.length === 1 ? '' : 'es'} calificado{candidates.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+
+                        <select
+                          value={assignedEmp?.id || ''}
+                          onChange={(e) => {
+                            setServiceAssignments((prev) => ({
+                              ...prev,
+                              [srv.id]: e.target.value,
+                            }));
+                          }}
+                          className="w-full bg-[#1a1a1a] border border-neutral-800 focus:border-[#C8A45C] text-white rounded-xl p-2.5 outline-none text-xs"
+                        >
+                          {candidates.map((emp) => {
+                            const empAvail = checkEmployeeAvailability({
+                              employee: emp,
+                              date,
+                              startTime: item.startTime,
+                              durationMinutes: item.durationMinutes,
+                              bookings,
+                              employeeBlocks,
+                            });
+                            const load = employeeWorkloads[emp.id] || 0;
+                            return (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.full_name} ({emp.type}) — {empAvail.isAvailable ? '🟢 Disponible' : `🔴 Ocupado (${empAvail.message || 'Conflicto'})`} — {load} cita{load === 1 ? '' : 's'} hoy
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    ) : (
+                      /* Vista en Modo Automático */
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-[#1a1a1a] p-3 rounded-xl border border-neutral-800/80">
+                        <div className="flex items-center gap-3">
+                          {assignedEmp?.avatar ? (
+                            <img
+                              src={assignedEmp.avatar}
+                              alt={assignedEmp.full_name}
+                              className="w-9 h-9 rounded-lg object-cover border border-[#C8A45C]/30 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                              {assignedEmp?.full_name?.charAt(0) || 'E'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-xs text-white">
+                                {assignedEmp?.full_name || 'Especialista Sugerido'}
+                              </span>
+                              <span className="text-[9px] uppercase font-mono px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
+                                {assignedEmp?.type || (isSpa ? 'Spa' : 'Barbero')}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-neutral-400 block mt-0.5">
+                              Asignado automáticamente por área ({isSpa ? 'Spa' : 'Barbería'}) · Carga: {assignedEmp ? (employeeWorkloads[assignedEmp.id] || 0) : 0} citas hoy
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-start sm:self-center">
+                          <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            <span>Auto-Asignado</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Estado de Disponibilidad en Tiempo Real para este servicio */}
+                    {assignedEmp && (
+                      <div>
+                        {availStatus.isAvailable ? (
+                          <div className="px-3 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-emerald-300 flex items-center gap-2 text-[11px]">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>
+                              <strong>{assignedEmp.full_name}</strong> está disponible para este servicio de {item.startTime} a {item.endTime}.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 rounded-lg bg-red-950/40 border border-red-500/40 text-red-300 flex items-start gap-2 text-[11px] animate-fadeIn">
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-semibold block">Conflicto de Horario:</span>
+                              <span className="text-[10px] text-red-300/90 leading-snug">
+                                {availStatus.message || 'El especialista ya cuenta con una cita o bloqueo en este intervalo.'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-500/60 text-red-300 flex items-start gap-2.5 animate-fadeIn">
-                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-red-200">
-                          Colaborador No Disponible: {effectiveEmployee.full_name}
-                        </span>
-                        <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded bg-red-900/80 text-red-200">
-                          {effectiveAvailability.reason || 'Conflicto'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-red-300/90 leading-relaxed">
-                        {effectiveAvailability.message ||
-                          'El colaborador ya cuenta con una reserva o bloqueo en este intervalo.'}
-                      </p>
-                      <p className="text-[10px] text-neutral-400">
-                        Cambie la hora de inicio, elija otro colaborador o active la asignación automática.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
 
           {/* SECCIÓN 4: MODALIDADES Y MÉTODOS DE PAGO */}
@@ -1238,7 +1401,16 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 {clientPhone && <span className="text-neutral-500 font-mono"> ({clientPhone})</span>}
               </div>
               <div>
-                Especialista: <strong className="text-[#E6C875]">{effectiveEmployee?.full_name || 'Sin asignar'}</strong>
+                Especialista{scheduledServices.length > 1 ? 's' : ''}:{' '}
+                <strong className="text-[#E6C875]">
+                  {scheduledServices.length === 1
+                    ? (getEffectiveEmployeeForService(scheduledServices[0]?.service.id)?.full_name || 'Sin asignar')
+                    : scheduledServices.map((item) => {
+                        const emp = getEffectiveEmployeeForService(item.service.id);
+                        return `${item.service.name}: ${emp?.full_name || 'Sin asignar'}`;
+                      }).join(' · ')
+                  }
+                </strong>
                 {' · '}
                 Horario: <strong className="text-white font-mono">{startTime} a {calculatedEndTime}</strong>
               </div>
