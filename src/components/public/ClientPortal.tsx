@@ -10,7 +10,6 @@ import {
   Mail,
   Calendar,
   CalendarX2,
-  Printer,
   QrCode,
   CheckCircle2,
   AlertCircle,
@@ -31,7 +30,7 @@ import {
 } from '../../lib/validators';
 
 export const ClientPortal: React.FC = () => {
-  const { currentUser, openTicketModal, setActiveView } = useApp();
+  const { currentUser, setActiveView } = useApp();
 
   // Profile fields state synchronized strictly with currentUser
   const [name, setName] = useState(currentUser.name || '');
@@ -393,32 +392,23 @@ export const ClientPortal: React.FC = () => {
                         </div>
 
                         {/* Payment Status Badge */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center shrink-0">
                           {b.payment_status === 'total' ? (
-                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 flex items-center gap-1 shadow-sm">
                               <CheckCircle2 className="w-3 h-3" />
                               <span>PAGADO COMPLETO</span>
                             </span>
                           ) : b.payment_status === 'parcial' ? (
-                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60 flex items-center gap-1">
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60 flex items-center gap-1 shadow-sm">
                               <Clock className="w-3 h-3" />
                               <span>SALDO PENDIENTE</span>
                             </span>
                           ) : (
-                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-950/60 text-red-300 border border-red-800/60 flex items-center gap-1">
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-red-950/60 text-red-300 border border-red-800/60 flex items-center gap-1 shadow-sm">
                               <AlertCircle className="w-3 h-3" />
                               <span>SIN PAGO</span>
                             </span>
                           )}
-
-                          <button
-                            type="button"
-                            onClick={() => openTicketModal('booking', b)}
-                            className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
-                            title="Imprimir Ticket"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
                         </div>
                       </div>
 
