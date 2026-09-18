@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Booking, VentaMostrador, formatSoles, formatLimaDate } from '../../types';
+import { formatCompletionTime } from '../../lib/bookingAvailability';
 import { Printer, X, Scissors, CheckCircle2 } from 'lucide-react';
 
 export const TicketTermicoModal: React.FC = () => {
@@ -160,7 +161,7 @@ export const TicketTermicoModal: React.FC = () => {
                       </div>
                       {item.liberado_at && (
                         <div className="text-[9px] text-emerald-800 font-semibold">
-                          ✓ Concluido anticipado ({item.liberado_at})
+                          ✓ Concluido anticipado ({formatCompletionTime(item.liberado_at)})
                         </div>
                       )}
                     </div>

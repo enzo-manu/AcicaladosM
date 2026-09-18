@@ -51,7 +51,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     employeeBlocks,
     bookings,
     currentRole,
-    paymentSettings,
     addBooking,
     openTicketModal,
   } = useApp();
@@ -138,11 +137,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     return 'barberia';
   }, [selectedServicesList]);
 
-  // Adelanto sugerido según configuración (ej. 25%)
-  const minAdvanceCents = Math.round(
-    (totalPriceCents * Math.max(1, paymentSettings.advance_percentage || 25)) / 100
-  );
-  const minAdvanceSoles = minAdvanceCents / 100;
 
   // Filtrado de servicios para la lista
   const filteredServices = useMemo(() => {
@@ -192,7 +186,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     for (const emp of availableEmployeesList) {
       const activeCount = bookings.filter((b) => {
         if (b.date !== date) return false;
-        if (b.status === 'cancelada' || b.status === 'expirada') return false;
         return (
           (b as any).assigned_employee_id === emp.id ||
           b.services?.some((s) => s.employee_id === emp.id)
@@ -556,7 +549,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
         services: serviceItems,
         total_price_cents: totalPriceCents,
         advance_amount_cents: paidCents,
-        status: paidCents >= totalPriceCents || paidCents >= minAdvanceCents ? 'confirmada' : 'pendiente',
         payment_status: paidCents >= totalPriceCents ? 'total' : paidCents > 0 ? 'parcial' : 'sin_pago',
         payment_method: pMethod || undefined,
         cash_cents: cashCents,
@@ -1246,9 +1238,6 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 onClick={() => {
                   setPaymentType('adelanto');
                   setIsMixto(false);
-                  if (!advanceAmountInput) {
-                    setAdvanceAmountInput(minAdvanceSoles.toString());
-                  }
                 }}
                 className={`p-2.5 rounded-xl border text-center transition cursor-pointer ${
                   paymentType === 'adelanto'
@@ -1281,25 +1270,13 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
             {/* CASO A: PAGO DE ADELANTO (Efectivo, Yape, Transferencia) */}
             {paymentType === 'adelanto' && (
               <div className="p-3.5 rounded-2xl bg-[#161616] border border-[#C8A45C]/30 space-y-3 animate-fadeIn">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <label className="text-xs font-semibold text-white">
-                      Monto del Adelanto Abonado (S/.)
-                    </label>
-                    <span className="text-[10px] text-neutral-400 block">
-                      Admite montos enteros o con decimales libres. Mínimo sugerido: S/ {minAdvanceSoles.toFixed(2)} (25%)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setAdvanceAmountInput(minAdvanceSoles.toString())}
-                      className="px-2.5 py-1 rounded-lg bg-black/60 border border-neutral-700 hover:border-[#C8A45C] text-[10px] text-[#E6C875] transition"
-                    >
-                      Sugerir 25% (S/ {minAdvanceSoles.toFixed(2)})
-                    </button>
-                  </div>
+                <div className="space-y-0.5">
+                  <label className="text-xs font-semibold text-white block">
+                    Monto del Adelanto Abonado (S/.)
+                  </label>
+                  <span className="text-[10px] text-neutral-400 block">
+                    Ingresa el monto manual abonado (admite montos enteros o decimales libres).
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-2">

@@ -64,9 +64,7 @@ export const ReportesView: React.FC = () => {
   // 2. Cálculos y Métricas Reactivas para la Fecha Seleccionada
   // Citas de la fecha (excluyendo canceladas y expiradas)
   const dayBookings = useMemo(() => {
-    return bookings.filter(
-      (b) => b.date === selectedDate && b.status !== 'cancelada' && b.status !== 'expirada'
-    );
+    return bookings.filter((b) => b.date === selectedDate);
   }, [bookings, selectedDate]);
 
   // Total de Atenciones de la fecha (conteo de servicios agendados o citas completadas)

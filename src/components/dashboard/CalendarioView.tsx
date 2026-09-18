@@ -178,7 +178,6 @@ export const CalendarioView: React.FC = () => {
             client: b.client_name,
             label: 'Cita',
             serviceName: srv.service_name || 'Servicio',
-            status: b.status,
             priceCents: srv.price_cents || b.total_price_cents,
             rawBooking: b,
           });
@@ -199,7 +198,6 @@ export const CalendarioView: React.FC = () => {
           client: b.client_name,
           label: 'Cita',
           serviceName: 'Servicio Programado',
-          status: b.status,
           priceCents: b.total_price_cents,
           rawBooking: b,
         });

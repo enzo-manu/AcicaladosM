@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatSoles, formatLimaDate, Booking, BookingStatus } from '../../types';
+import { formatSoles, formatLimaDate, Booking } from '../../types';
 import { PaymentQRWidget } from '../common/PaymentQRWidget';
 import { supabase } from '../../lib/supabase/client';
 import {
@@ -118,7 +118,6 @@ export const ClientPortal: React.FC = () => {
               : [],
             total_price_cents: b.total_price_cents,
             advance_amount_cents: b.advance_amount_cents || 0,
-            status: b.status as BookingStatus,
             payment_status: b.payment_status as any,
             created_at: b.created_at,
             confirmed_at: b.confirmed_at || undefined,

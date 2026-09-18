@@ -258,7 +258,6 @@ export type Database = {
           slot_lock_expires_at: string | null
           slot_locked_at: string | null
           start_time: string
-          status: string
           total_duration_minutes: number
           total_price_cents: number
           updated_at: string
@@ -299,7 +298,6 @@ export type Database = {
           slot_lock_expires_at?: string | null
           slot_locked_at?: string | null
           start_time: string
-          status?: string
           total_duration_minutes: number
           total_price_cents: number
           updated_at?: string
@@ -340,7 +338,6 @@ export type Database = {
           slot_lock_expires_at?: string | null
           slot_locked_at?: string | null
           start_time?: string
-          status?: string
           total_duration_minutes?: number
           total_price_cents?: number
           updated_at?: string

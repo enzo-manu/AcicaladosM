@@ -115,6 +115,29 @@ export function getLimaDateTime(dateOverride?: Date): {
 }
 
 /**
+ * Formatea una marca de tiempo de culminación (ISO o HH:mm) a una cadena limpia HH:mm (ej. "14:30").
+ * Valida valores nulos o vacíos con seguridad antes de parsear.
+ */
+export function formatCompletionTime(dateString?: string | null): string {
+  if (!dateString) return '';
+  const trimmed = dateString.trim();
+  if (!trimmed) return '';
+
+  // Si ya es un formato "HH:mm" o "HH:mm:ss"
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
+    return trimmed.slice(0, 5);
+  }
+
+  try {
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) return trimmed;
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
  * Determina los colaboradores activos aptos para brindar un servicio específico
  */
 export function getEligibleEmployeesForService(
@@ -196,7 +219,6 @@ export function isEmployeeBooked(
 
   return bookings.some((b) => {
     if (b.date !== date) return false;
-    if (b.status === 'cancelada' || b.status === 'expirada') return false;
 
     // Verificar si el colaborador está asignado a nivel de algún servicio específico
     const matchingServices = b.services?.filter((s) => s.employee_id === empId) || [];
@@ -237,7 +259,6 @@ export function countUnassignedBookings(
 
   return bookings.filter((b) => {
     if (b.date !== date) return false;
-    if (b.status === 'cancelada' || b.status === 'expirada') return false;
 
     // Si no tiene asignado colaborador principal ni en servicios
     const hasAssigned =
@@ -525,7 +546,6 @@ export function checkEmployeeAvailability(params: {
   let conflictingBookingDetails: { code?: string; start_time: string; end_time: string } | null = null;
   const bookingConflict = (bookings || []).find((b) => {
     if (b.date !== date) return false;
-    if (b.status === 'cancelada' || b.status === 'expirada') return false;
 
     const matchingServices = b.services?.filter((s) => s.employee_id === employee.id) || [];
     const isMainAssigned = (b as any).assigned_employee_id === employee.id;

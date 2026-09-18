@@ -153,11 +153,9 @@ export interface EmployeeAppointmentItem {
   duration_minutes: number;
   start_time: string; // HH:mm
   end_time: string;   // HH:mm (strictly start_time + duration_minutes)
-  status: BookingStatus | string;
   payment_status?: PaymentStatus | string;
 }
 
-export type BookingStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'expirada';
 export type PaymentStatus = 'sin_pago' | 'parcial' | 'total';
 
 export interface Booking {
@@ -174,7 +172,6 @@ export interface Booking {
   services: BookingServiceItem[];
   total_price_cents: number;
   advance_amount_cents: number; // Verificado cobrado
-  status: BookingStatus;
   payment_status: PaymentStatus;
   created_at: string;
   confirmed_at?: string;
@@ -330,17 +327,12 @@ export interface LightboxData {
  * - Si la cita está pendiente o no registra abono: Aporta S/ 0.00.
  */
 export function getBookingCollectedAmountCents(b: Booking): number {
-  if (b.status === 'cancelada' || b.status === 'expirada') {
-    return 0;
-  }
-
   const totalPrice = b.total_price_cents || 0;
   const advance = b.advance_amount_cents || 0;
 
   // Cita con cobro total concluido / 100% pagada
   const isPaidTotal =
     b.payment_status === 'total' ||
-    b.status === 'completada' ||
     (advance > 0 && totalPrice > 0 && advance >= totalPrice);
 
   if (isPaidTotal) {

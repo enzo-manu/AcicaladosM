@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Booking, BookingStatus, formatSoles, formatLimaDate, PaymentLog, Service, Employee, EmployeeBlock, BookingServiceItem } from '../../types';
+import { Booking, formatSoles, formatLimaDate, PaymentLog, Service, Employee, EmployeeBlock, BookingServiceItem } from '../../types';
 import { getTodayDateString } from '../../data/initialData';
-import { isEmployeeBlocked, isEmployeeBooked, timeToMinutes, minutesToTime } from '../../lib/bookingAvailability';
+import { isEmployeeBlocked, isEmployeeBooked, timeToMinutes, minutesToTime, formatCompletionTime } from '../../lib/bookingAvailability';
 import {
   BookOpen,
   Plus,
@@ -281,7 +281,6 @@ export const ReservasManager: React.FC = () => {
     updatePaymentSettings,
     registerBookingPayment,
     voidPayment,
-    updateBookingStatus,
     liberateServiceEarly,
     reassignBookingService,
     deleteBooking,
@@ -291,9 +290,8 @@ export const ReservasManager: React.FC = () => {
   } = useApp();
 
   // Filters
-  const [dateFilter, setDateFilter] = useState<'hoy' | 'manana' | 'todas' | 'custom'>('todas');
+  const [dateFilter, setDateFilter] = useState<'hoy' | 'manana' | 'todas' | 'custom'>('hoy');
   const [customDate, setCustomDate] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -315,7 +313,6 @@ export const ReservasManager: React.FC = () => {
   const [editClientPhone, setEditClientPhone] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editStartTime, setEditStartTime] = useState('');
-  const [editStatus, setEditStatus] = useState<BookingStatus>('pendiente');
 
   // Delete Reservation Modal State (Admin)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
@@ -352,9 +349,6 @@ export const ReservasManager: React.FC = () => {
       }
       if (dateFilter === 'custom' && customDate && b.date !== customDate) return false;
 
-      // Status filter
-      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-
       // Category filter
       if (categoryFilter !== 'all' && b.type !== categoryFilter) return false;
 
@@ -370,7 +364,7 @@ export const ReservasManager: React.FC = () => {
 
       return true;
     });
-  }, [bookings, categoryFilter, customDate, dateFilter, searchQuery, statusFilter, todayStr]);
+  }, [bookings, categoryFilter, customDate, dateFilter, searchQuery, todayStr]);
 
   // Open Payment Modal
   const handleOpenPaymentModal = (b: Booking) => {
@@ -433,7 +427,6 @@ export const ReservasManager: React.FC = () => {
     setEditClientPhone(b.client_phone);
     setEditDate(b.date);
     setEditStartTime(b.start_time);
-    setEditStatus(b.status);
     setIsEditModalOpen(true);
   };
 
@@ -451,7 +444,6 @@ export const ReservasManager: React.FC = () => {
       client_phone: editClientPhone.trim(),
       date: editDate,
       start_time: editStartTime,
-      status: editStatus,
     });
 
     setIsEditModalOpen(false);
@@ -546,10 +538,14 @@ export const ReservasManager: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Fast Date Filters */}
           <div className="flex items-center gap-1.5">
-            {(['todas', 'hoy', 'manana'] as const).map((d) => (
+            {(['hoy', 'manana', 'todas'] as const).map((d) => (
               <button
                 key={d}
-                onClick={() => setDateFilter(d)}
+                type="button"
+                onClick={() => {
+                  setDateFilter(d);
+                  setCustomDate('');
+                }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition ${
                   dateFilter === d
                     ? 'bg-[#C8A45C] text-black font-semibold'
@@ -564,27 +560,20 @@ export const ReservasManager: React.FC = () => {
               type="date"
               value={customDate}
               onChange={(e) => {
-                setCustomDate(e.target.value);
-                setDateFilter('custom');
+                const val = e.target.value;
+                setCustomDate(val);
+                if (val) {
+                  setDateFilter('custom');
+                } else {
+                  setDateFilter('hoy');
+                }
               }}
               className="bg-[#1A1A1A] border border-neutral-800 text-xs text-white px-2.5 py-1.5 rounded-lg outline-none"
             />
           </div>
 
-          {/* Status and Category Dropdowns */}
+          {/* Category Dropdown */}
           <div className="flex items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-[#1A1A1A] border border-neutral-800 text-xs text-neutral-300 px-3 py-1.5 rounded-lg outline-none"
-            >
-              <option value="all">Estado Cita: Todos</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="confirmada">Confirmada</option>
-              <option value="completada">Completada</option>
-              <option value="cancelada">Cancelada</option>
-            </select>
-
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
@@ -624,7 +613,6 @@ export const ReservasManager: React.FC = () => {
                 <th className="py-3.5 px-4 text-right">Total</th>
                 <th className="py-3.5 px-4 text-right">Cobrado</th>
                 <th className="py-3.5 px-4 text-right">Saldo</th>
-                <th className="py-3.5 px-4 text-center whitespace-nowrap min-w-[110px]">Estado Cita</th>
                 <th className="py-3.5 px-4 text-center whitespace-nowrap min-w-[140px]">Estado Pago</th>
                 <th className="py-3.5 px-4 text-right whitespace-nowrap min-w-[180px]">Acciones</th>
               </tr>
@@ -632,7 +620,7 @@ export const ReservasManager: React.FC = () => {
             <tbody className="divide-y divide-neutral-800/60">
               {filteredBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-neutral-500">
+                  <td colSpan={9} className="py-12 text-center text-neutral-500">
                     No se encontraron reservas con los filtros aplicados.
                   </td>
                 </tr>
@@ -691,28 +679,6 @@ export const ReservasManager: React.FC = () => {
                         {/* Pending Balance */}
                         <td className="py-3 px-4 text-right font-bold text-[#E6C875]">
                           {formatSoles(saldo)}
-                        </td>
-
-                        {/* Booking Status Badge */}
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <select
-                            value={b.status}
-                            onChange={(e) => updateBookingStatus(b.id, e.target.value as BookingStatus)}
-                            className={`inline-flex items-center justify-center text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer outline-none whitespace-nowrap ${
-                              b.status === 'confirmada'
-                                ? 'badge-success'
-                                : b.status === 'completada'
-                                ? 'badge-gold'
-                                : b.status === 'pendiente'
-                                ? 'badge-warning'
-                                : 'badge-error'
-                            }`}
-                          >
-                            <option value="pendiente">Pendiente</option>
-                            <option value="confirmada">Confirmada</option>
-                            <option value="completada">Completada</option>
-                            <option value="cancelada">Cancelada</option>
-                          </select>
                         </td>
 
                         {/* Payment Status Badge */}
@@ -813,7 +779,7 @@ export const ReservasManager: React.FC = () => {
                       {/* Expandable Row with Services & Early Release */}
                       {isExpanded && (
                         <tr className="bg-[#111111] border-b border-neutral-800">
-                          <td colSpan={10} className="p-4 sm:p-5">
+                          <td colSpan={9} className="p-4 sm:p-5">
                             <div className="space-y-3 max-w-4xl mx-auto">
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-[#E6C875] uppercase tracking-wider">
@@ -849,7 +815,7 @@ export const ReservasManager: React.FC = () => {
                                       {srv.liberado_at ? (
                                         <span className="px-2.5 py-1 rounded bg-emerald-950/70 text-emerald-300 border border-emerald-800/70 text-[10px] font-semibold flex items-center gap-1.5 shadow-sm">
                                           <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                                          ✓ Culminado a las {srv.liberado_at}
+                                          <span>Culminado a las {formatCompletionTime(srv.liberado_at)}</span>
                                         </span>
                                       ) : (
                                         <button
@@ -1285,22 +1251,6 @@ export const ReservasManager: React.FC = () => {
                     className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2 outline-none focus:border-[#C8A45C]"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-neutral-300 font-medium">Estado de la Reserva</label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as BookingStatus)}
-                  className="w-full bg-[#181818] border border-neutral-800 text-white rounded-xl p-2.5 outline-none focus:border-[#C8A45C]"
-                >
-                  <option value="pendiente">Pendiente (Sin confirmar)</option>
-                  <option value="confirmada">Confirmada (Adelanto registrado)</option>
-                  <option value="en_atencion">En Atención (En sillón)</option>
-                  <option value="completada">Completada (Atendida)</option>
-                  <option value="cancelada">Cancelada</option>
-                  <option value="no_asistio">No asistió</option>
-                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-neutral-800">

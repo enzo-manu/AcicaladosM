@@ -1545,7 +1545,6 @@ export const INITIAL_BOOKINGS: Booking[] = [
     ],
     total_price_cents: 6000, // S/ 60.00
     advance_amount_cents: 6000, // Pagado completo
-    status: 'confirmada',
     payment_status: 'total',
     created_at: `${todayStr}T08:15:00Z`,
     confirmed_at: `${todayStr}T08:20:00Z`,
@@ -1574,7 +1573,6 @@ export const INITIAL_BOOKINGS: Booking[] = [
     ],
     total_price_cents: 3500, // S/ 35.00
     advance_amount_cents: 1500, // Adelanto del >25% (S/ 15.00)
-    status: 'confirmada',
     payment_status: 'parcial',
     created_at: `${todayStr}T09:00:00Z`,
     confirmed_at: `${todayStr}T09:05:00Z`,
@@ -1601,7 +1599,6 @@ export const INITIAL_BOOKINGS: Booking[] = [
     ],
     total_price_cents: 9000,
     advance_amount_cents: 3000, // S/ 30.00 adelanto verificado
-    status: 'confirmada',
     payment_status: 'parcial',
     created_at: `${todayStr}T09:30:00Z`,
     confirmed_at: `${todayStr}T09:40:00Z`,
@@ -1628,7 +1625,6 @@ export const INITIAL_BOOKINGS: Booking[] = [
     ],
     total_price_cents: 3000,
     advance_amount_cents: 0,
-    status: 'pendiente',
     payment_status: 'sin_pago',
     created_at: `${todayStr}T10:00:00Z`,
   },
@@ -1662,7 +1658,6 @@ export const INITIAL_BOOKINGS: Booking[] = [
     ],
     total_price_cents: 11500, // S/ 115.00
     advance_amount_cents: 4000, // Adelanto Yape
-    status: 'confirmada',
     payment_status: 'parcial',
     created_at: `${todayStr}T10:30:00Z`,
     confirmed_at: `${todayStr}T10:45:00Z`,

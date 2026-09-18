@@ -36,8 +36,8 @@ export const DashboardHome: React.FC = () => {
         totalIngresosCents: kpis.totalIngresosCents,
         totalEgresosCents: kpis.totalEgresosCents,
         balanceNetoCents: kpis.balanceNetoCents,
-        citasCount: bookings.filter((b) => b.status !== 'cancelada' && b.status !== 'expirada').length,
-        citasConfirmadasCount: bookings.filter((b) => b.status === 'confirmada').length,
+        citasCount: bookings.length,
+        citasConfirmadasCount: bookings.filter((b) => b.payment_status === 'total' || b.payment_status === 'parcial').length,
       };
     }
 
@@ -60,9 +60,7 @@ export const DashboardHome: React.FC = () => {
     };
 
     // 1. Citas activas en rango (sólo 100% de pagadas y adelantos de activas)
-    const rangeBookings = bookings.filter(
-      (b) => b.status !== 'cancelada' && b.status !== 'expirada' && isInRange(b.date)
-    );
+    const rangeBookings = bookings.filter((b) => isInRange(b.date));
     const ingresosServiciosCents = rangeBookings.reduce(
       (acc, b) => acc + getBookingCollectedAmountCents(b),
       0
@@ -90,7 +88,9 @@ export const DashboardHome: React.FC = () => {
 
     const balanceNetoCents = totalIngresosCents - totalEgresosCents;
     const citasCount = rangeBookings.length;
-    const citasConfirmadasCount = rangeBookings.filter((b) => b.status === 'confirmada').length;
+    const citasConfirmadasCount = rangeBookings.filter(
+      (b) => b.payment_status === 'total' || b.payment_status === 'parcial'
+    ).length;
 
     return {
       totalIngresosCents,

@@ -15,7 +15,6 @@ import {
   BonusSettings,
   AttendanceSettings,
   CartItem,
-  BookingStatus,
   WardrobeStatus,
   LightboxData,
   getBookingCollectedAmountCents,
@@ -100,7 +99,6 @@ interface AppContextType {
 
   // Business Action Handlers
   addBooking: (booking: Omit<Booking, 'id' | 'code' | 'created_at'>) => Booking;
-  updateBookingStatus: (id: string, status: BookingStatus) => void;
   registerBookingPayment: (
     bookingId: string,
     amountCents: number,
@@ -467,7 +465,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }) : [],
             total_price_cents: b.total_price_cents,
             advance_amount_cents: b.advance_amount_cents || 0,
-            status: b.status as BookingStatus,
             payment_status: b.payment_status as any,
             created_at: b.created_at,
             confirmed_at: b.confirmed_at || undefined,
@@ -902,7 +899,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             advance_percentage: advancePercentage,
             advance_amount_cents: advanceAmount,
             balance_cents: balance,
-            status: bookingData.status || 'confirmada',
             payment_status:
               bookingData.payment_status ||
               (advanceAmount >= totalPrice ? 'total' : advanceAmount > 0 ? 'parcial' : 'sin_pago'),
@@ -1016,19 +1012,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newBooking;
   }, [paymentSettings.advance_percentage, pulseRealtime, employees, services]);
 
-  const updateBookingStatus = useCallback((id: string, status: BookingStatus) => {
-    setBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status } : b))
-    );
-    pulseRealtime();
-
-    if (id.includes('-') && id.length === 36) {
-      supabase.from('bookings').update({ status }).eq('id', id).then(() => {
-        pulseRealtime();
-      });
-    }
-  }, [pulseRealtime]);
-
   const registerBookingPayment = useCallback((
     bookingId: string,
     amountCents: number,
@@ -1043,15 +1026,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return prev.map((b) => {
         if (b.id === bookingId) {
           const newAdvance = b.advance_amount_cents + amountCents;
-          const minAdvanceCents = Math.round((b.total_price_cents * paymentSettings.advance_percentage) / 100);
-
-          let newStatus = b.status;
-          if (newAdvance >= minAdvanceCents && b.status === 'pendiente') {
-            newStatus = 'confirmada';
-          }
-          if (newAdvance >= b.total_price_cents) {
-            newStatus = 'confirmada';
-          }
 
           let paymentStatus: Booking['payment_status'] = 'sin_pago';
           if (newAdvance >= b.total_price_cents) {
@@ -1063,9 +1037,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return {
             ...b,
             advance_amount_cents: newAdvance,
-            status: newStatus,
             payment_status: paymentStatus,
-            confirmed_at: b.confirmed_at || (newStatus === 'confirmada' ? `${today}T12:00:00Z` : undefined),
+            confirmed_at: b.confirmed_at || (newAdvance > 0 ? `${today}T12:00:00Z` : undefined),
           };
         }
         return b;
@@ -1104,24 +1077,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const newAdvance = (targetBooking?.advance_amount_cents || 0) + amountCents;
       const totalPrice = targetBooking?.total_price_cents || 0;
-      const minAdvanceCents = Math.round((totalPrice * paymentSettings.advance_percentage) / 100);
-      let newStatus = targetBooking?.status || 'pendiente';
-      if (newAdvance >= minAdvanceCents && newStatus === 'pendiente') {
-        newStatus = 'confirmada';
-      }
       const payStatus = newAdvance >= totalPrice ? 'total' : newAdvance > 0 ? 'parcial' : 'sin_pago';
 
       supabase.from('bookings').update({
         advance_amount_cents: newAdvance,
         balance_cents: Math.max(0, totalPrice - newAdvance),
-        status: newStatus,
         payment_status: payStatus,
-        confirmed_at: newStatus === 'confirmada' ? (targetBooking?.confirmed_at || new Date().toISOString()) : null,
+        confirmed_at: newAdvance > 0 ? (targetBooking?.confirmed_at || new Date().toISOString()) : null,
       }).eq('id', bookingId).then(() => {
         pulseRealtime();
       });
     }
-  }, [bookings, paymentSettings.advance_percentage, pulseRealtime]);
+  }, [bookings, pulseRealtime]);
 
   const voidPayment = useCallback((paymentId: string, reason: string) => {
     const payment = paymentLogs.find((p) => p.id === paymentId);
@@ -1344,7 +1311,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (updates.date !== undefined) dbUpdates.booking_date = updates.date;
         if (updates.start_time !== undefined) dbUpdates.start_time = updates.start_time;
         if (updates.end_time !== undefined) dbUpdates.end_time = updates.end_time;
-        if (updates.status !== undefined) dbUpdates.status = updates.status;
         if (updates.total_price_cents !== undefined) dbUpdates.total_price_cents = updates.total_price_cents;
         if (updates.advance_amount_cents !== undefined) {
           dbUpdates.advance_amount_cents = updates.advance_amount_cents;
@@ -2502,9 +2468,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const kpis = useMemo(() => {
     const today = getTodayDateString();
 
-    const activeBookings = bookings.filter(
-      (b) => b.status !== 'cancelada' && b.status !== 'expirada'
-    );
+    const activeBookings = bookings;
 
     // Suma únicamente reservas en estado PAGADO (100%) y adelantos percibidos en tiempo real
     const ingresosServiciosCents = activeBookings.reduce(
@@ -2528,10 +2492,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const balanceNetoCents = totalIngresosCents - totalEgresosCents;
 
-    const citasHoy = bookings.filter(
-      (b) => b.date === today && b.status !== 'cancelada' && b.status !== 'expirada'
+    const citasHoy = bookings.filter((b) => b.date === today);
+    const citasConfirmadas = bookings.filter(
+      (b) => b.payment_status === 'total' || b.payment_status === 'parcial'
     );
-    const citasConfirmadas = bookings.filter((b) => b.status === 'confirmada');
 
     const saldosPorCobrarCents = activeBookings.reduce((acc, b) => {
       const collected = getBookingCollectedAmountCents(b);
@@ -2592,7 +2556,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lastSyncTimestamp,
         refreshData: fetchAllFromSupabase,
         addBooking,
-        updateBookingStatus,
         registerBookingPayment,
         voidPayment,
         liberateServiceEarly,

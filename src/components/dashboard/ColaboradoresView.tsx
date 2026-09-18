@@ -621,7 +621,6 @@ export const ColaboradoresView: React.FC = () => {
 
     (bookings || []).forEach((b) => {
       if (b.date !== appointmentsDateFilter) return;
-      if (b.status === 'cancelada' || b.status === 'expirada') return;
 
       const matchingServices = (b.services || []).filter(
         (s) => s.employee_id === appointmentsEmp.id
@@ -650,7 +649,6 @@ export const ColaboradoresView: React.FC = () => {
             duration_minutes: durationMinutes,
             start_time: srvStart,
             end_time: srvEnd,
-            status: b.status,
             payment_status: b.payment_status,
           });
         });
@@ -676,7 +674,6 @@ export const ColaboradoresView: React.FC = () => {
           duration_minutes: durationMinutes,
           start_time: srvStart,
           end_time: srvEnd,
-          status: b.status,
           payment_status: b.payment_status,
         });
       }
@@ -2219,13 +2216,13 @@ export const ColaboradoresView: React.FC = () => {
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
                   <span className="text-[10px] text-neutral-500 block">Confirmadas</span>
                   <span className="font-bold text-emerald-400 text-base font-serif-luxury">
-                    {assignedAppointmentsForDate.filter((b) => b.status === 'confirmada').length}
+                    {assignedAppointmentsForDate.filter((b) => b.payment_status === 'total' || b.payment_status === 'parcial').length}
                   </span>
                 </div>
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">
                   <span className="text-[10px] text-neutral-500 block">Pendientes</span>
                   <span className="font-bold text-amber-400 text-base font-serif-luxury">
-                    {assignedAppointmentsForDate.filter((b) => b.status === 'pendiente').length}
+                    {assignedAppointmentsForDate.filter((b) => b.payment_status === 'sin_pago').length}
                   </span>
                 </div>
                 <div className="bg-[#181818] border border-neutral-800 rounded-xl p-2.5">

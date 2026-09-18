@@ -215,7 +215,6 @@ export const PublicBookingFlow: React.FC = () => {
       services: mappedServices,
       total_price_cents: totalPriceCents,
       advance_amount_cents: 0,
-      status: 'pendiente',
       payment_status: 'sin_pago',
       notes,
     });
