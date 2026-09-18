@@ -56,6 +56,9 @@ export const AuthCallback: React.FC = () => {
           .single();
 
         const userRole = profile?.role || 'cliente';
+        try {
+          localStorage.setItem('acicalados_cached_role', userRole);
+        } catch {}
 
         if (isMounted) {
           setStatusMessage(`¡Autenticación exitosa! Redirigiendo según tu rol (${userRole})...`);

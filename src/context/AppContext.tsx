@@ -41,6 +41,7 @@ import { timeToMinutes, minutesToTime } from '../lib/bookingAvailability';
 interface AppContextType {
   // Navigation & Role
   currentRole: UserRole;
+  isAuthLoading: boolean;
   activeView: string;
   setActiveView: (view: string) => void;
   currentUser: {
@@ -182,9 +183,39 @@ interface AppContextType {
   };
 }
 
+const getCachedRole = (): UserRole => {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('acicalados_cached_role');
+      if (
+        cached === 'admin' ||
+        cached === 'recepcionista' ||
+        cached === 'empleado' ||
+        cached === 'cliente'
+      ) {
+        return cached as UserRole;
+      }
+    } catch {}
+  }
+  return 'anon';
+};
+
+const getCachedUser = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('acicalados_cached_user');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+  }
+  return null;
+};
+
 const getInitialView = (): string => {
   if (typeof window !== 'undefined' && window.location && window.location.pathname) {
-    const path = window.location.pathname;
+    let path = window.location.pathname;
+    if (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
     if (
       path === '/auth/login' ||
       path === '/auth/callback' ||
@@ -206,7 +237,8 @@ const getInitialView = (): string => {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentRole, setCurrentRoleState] = useState<UserRole>('anon');
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [currentRole, setCurrentRoleState] = useState<UserRole>(getCachedRole);
   const [activeViewState, setActiveViewState] = useState<string>(getInitialView);
   const [currentUserOverride, setCurrentUserOverride] = useState<{
     id: string;
@@ -216,7 +248,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole;
     phone?: string;
     dni?: string;
-  } | null>(null);
+  } | null>(getCachedUser);
 
   const activeView = activeViewState;
   const setActiveView = useCallback((view: string) => {
@@ -237,15 +269,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Protección de rutas: redirigir a clientes y no autenticados fuera de /dashboard
+  // Protección de rutas: redirigir a clientes y no autenticados fuera de /dashboard SOLO cuando la autenticación no esté cargando
   useEffect(() => {
+    if (isAuthLoading) return;
+
     if (
       activeViewState.startsWith('/dashboard') &&
       (currentRole === 'cliente' || currentRole === 'anonimo' || currentRole === 'anon')
     ) {
       setActiveView('/mi-cuenta');
     }
-  }, [activeViewState, currentRole, setActiveView]);
+  }, [activeViewState, currentRole, isAuthLoading, setActiveView]);
   const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [wardrobe, setWardrobe] = useState<WardrobeItem[]>(INITIAL_WARDROBE);
@@ -674,6 +708,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sincronización en tiempo real con Supabase Auth
   useEffect(() => {
+    let isMounted = true;
+
     const syncUserSession = async (session: any) => {
       if (session?.user) {
         try {
@@ -684,54 +720,95 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .single();
 
           const role = (profile?.role || 'cliente') as UserRole;
-          setCurrentRoleState(role);
+          if (isMounted) {
+            setCurrentRoleState(role);
+            try {
+              localStorage.setItem('acicalados_cached_role', role);
+            } catch {}
 
-          const name = profile?.first_name
-            ? `${profile.first_name} ${profile.last_name || ''}`.trim()
-            : session.user.user_metadata?.full_name ||
-              session.user.user_metadata?.name ||
-              session.user.email?.split('@')[0] ||
-              'Cliente';
+            const name = profile?.first_name
+              ? `${profile.first_name} ${profile.last_name || ''}`.trim()
+              : session.user.user_metadata?.full_name ||
+                session.user.user_metadata?.name ||
+                session.user.email?.split('@')[0] ||
+                'Cliente';
 
-          setCurrentUserOverride({
-            id: session.user.id,
-            name,
-            email: session.user.email || '',
-            avatar:
-              profile?.avatar_url ||
-              session.user.user_metadata?.avatar_url ||
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-            role,
-            phone: sanitizePhone(profile?.phone || '') || '',
-            dni: sanitizeDni(profile?.dni || '') || '',
-          });
-          fetchAllFromSupabase();
+            const userObj = {
+              id: session.user.id,
+              name,
+              email: session.user.email || '',
+              avatar:
+                profile?.avatar_url ||
+                session.user.user_metadata?.avatar_url ||
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+              role,
+              phone: sanitizePhone(profile?.phone || '') || '',
+              dni: sanitizeDni(profile?.dni || '') || '',
+            };
+
+            setCurrentUserOverride(userObj);
+            try {
+              localStorage.setItem('acicalados_cached_user', JSON.stringify(userObj));
+            } catch {}
+            fetchAllFromSupabase();
+          }
         } catch (err) {
           console.warn('Sincronización de perfil de auth completada con fallbacks:', err);
+        } finally {
+          if (isMounted) {
+            setIsAuthLoading(false);
+          }
+        }
+      } else {
+        if (isMounted) {
+          setIsAuthLoading(false);
         }
       }
     };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        syncUserSession(session);
+        await syncUserSession(session);
+      } else {
+        if (isMounted) {
+          setCurrentRoleState('anon');
+          setCurrentUserOverride(null);
+          try {
+            localStorage.removeItem('acicalados_cached_role');
+            localStorage.removeItem('acicalados_cached_user');
+          } catch {}
+          setIsAuthLoading(false);
+        }
+      }
+    }).catch((err) => {
+      console.warn('Error verificando sesión Supabase:', err);
+      if (isMounted) {
+        setIsAuthLoading(false);
       }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        syncUserSession(session);
+        await syncUserSession(session);
       } else {
-        setCurrentRoleState('anon');
-        setCurrentUserOverride(null);
-        setBookings([]);
-        fetchAllFromSupabase();
+        if (isMounted) {
+          setCurrentRoleState('anon');
+          setCurrentUserOverride(null);
+          try {
+            localStorage.removeItem('acicalados_cached_role');
+            localStorage.removeItem('acicalados_cached_user');
+          } catch {}
+          setBookings([]);
+          setIsAuthLoading(false);
+          fetchAllFromSupabase();
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, [fetchAllFromSupabase]);
@@ -758,8 +835,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Error cerrando sesión:', err);
     }
+    try {
+      localStorage.removeItem('acicalados_cached_role');
+      localStorage.removeItem('acicalados_cached_user');
+    } catch {}
     setCurrentUserOverride(null);
     setCurrentRoleState('anon');
+    setIsAuthLoading(false);
     setBookings([]);
     setActiveView('/');
   }, [setActiveView]);
@@ -2517,6 +2599,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentRole,
+        isAuthLoading,
         activeView,
         setActiveView,
         currentUser,

@@ -32,10 +32,10 @@ import { VestuarioManager } from './components/dashboard/VestuarioManager';
 import { ReportesView } from './components/dashboard/ReportesView';
 import { ServiciosManager } from './components/dashboard/ServiciosManager';
 
-import { MapPin, Phone, ShieldCheck, Scissors } from 'lucide-react';
+import { MapPin, Phone, ShieldCheck, Scissors, Loader2 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { activeView, setActiveView, currentRole } = useApp();
+  const { activeView, setActiveView, currentRole, isAuthLoading } = useApp();
   const mainContentRef = React.useRef<HTMLElement>(null);
 
   const isDashboard = activeView.startsWith('/dashboard');
@@ -43,13 +43,14 @@ const AppContent: React.FC = () => {
 
   // Check RBAC permission for dashboard
   const isPublicRole = currentRole === 'anonimo' || currentRole === 'cliente' || currentRole === 'anon';
+  const isStaffRole = currentRole === 'admin' || currentRole === 'recepcionista';
 
-  // Redirección inmediata: bloquear a clientes de /dashboard/* y enviarlos a /mi-cuenta
+  // Redirección inmediata: bloquear a clientes de /dashboard/* y enviarlos a /mi-cuenta SOLO cuando la autenticación finalizó
   React.useEffect(() => {
-    if (isDashboard && isPublicRole) {
+    if (!isAuthLoading && isDashboard && isPublicRole) {
       setActiveView('/mi-cuenta');
     }
-  }, [isDashboard, isPublicRole, setActiveView]);
+  }, [isAuthLoading, isDashboard, isPublicRole, setActiveView]);
 
   // Reset scroll to top when changing dashboard views
   React.useEffect(() => {
@@ -90,7 +91,12 @@ const AppContent: React.FC = () => {
             ref={mainContentRef}
             className="flex-1 h-full min-w-0 overflow-y-auto overflow-x-hidden pb-12 bg-neutral-950/70"
           >
-            {isPublicRole ? (
+            {isAuthLoading && !isStaffRole ? (
+              <div className="flex flex-col items-center justify-center h-full min-h-[400px] space-y-3">
+                <Loader2 className="w-8 h-8 text-[#C8A45C] animate-spin" />
+                <p className="text-xs text-neutral-400">Verificando credenciales de acceso...</p>
+              </div>
+            ) : isPublicRole ? (
               <div className="max-w-md mx-auto my-20 p-6 rounded-2xl bg-[#141414] border border-red-900/40 text-center space-y-4 shadow-2xl">
                 <div className="w-12 h-12 rounded-full bg-red-950/40 border border-red-800/60 text-red-400 flex items-center justify-center mx-auto">
                   <ShieldCheck className="w-6 h-6" />

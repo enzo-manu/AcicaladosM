@@ -106,6 +106,9 @@ export const LoginView: React.FC = () => {
             .single();
 
           const role = profile?.role || 'cliente';
+          try {
+            localStorage.setItem('acicalados_cached_role', role);
+          } catch {}
           setTimeout(() => {
             if (role === 'admin' || role === 'recepcionista') {
               setActiveView('/dashboard');
