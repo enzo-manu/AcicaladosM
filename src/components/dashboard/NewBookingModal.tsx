@@ -94,19 +94,15 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset initial selected service when modal opens
+  // Reset de formulario al abrir el modal (estado inicial limpio, sin servicios preseleccionados)
   useEffect(() => {
     if (isOpen) {
       setNameError(false);
       setSubmitError(null);
-      if (selectedServiceIds.length === 0 && services.length > 0) {
-        const firstActive = services.find((s) => s.active) || services[0];
-        if (firstActive) {
-          setSelectedServiceIds([firstActive.id]);
-        }
-      }
+      setSelectedServiceIds([]);
+      setServiceAssignments({});
     }
-  }, [isOpen, services]);
+  }, [isOpen]);
 
   // Servicios seleccionados completos
   const selectedServicesList = useMemo(() => {
@@ -165,11 +161,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
     });
   }, [services, categoryFilter, serviceSearch]);
 
-  // Toggle de selección de servicio
+  // Toggle de selección de servicio (toggle puro: permite deselección total)
   const toggleServiceSelection = (srvId: string) => {
     setSelectedServiceIds((prev) => {
-      if (prev.includes(srvId)) {
-        if (prev.length === 1) return prev; // Mantener al menos uno
+      const exists = prev.includes(srvId);
+      if (exists) {
+        setServiceAssignments((curr) => {
+          if (!curr[srvId]) return curr;
+          const next = { ...curr };
+          delete next[srvId];
+          return next;
+        });
         return prev.filter((id) => id !== srvId);
       } else {
         return [...prev, srvId];
@@ -567,7 +569,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
       setClientName('');
       setClientPhone('');
       setClientDni('');
-      setSelectedServiceIds(services[0]?.id ? [services[0].id] : []);
+      setSelectedServiceIds([]);
       setServiceAssignments({});
       setPaymentType('sin_pago');
       setIsMixto(false);
@@ -839,18 +841,17 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       className="inline-flex items-center gap-1 bg-black/60 border border-neutral-700 text-neutral-200 px-2 py-0.5 rounded-md text-[11px]"
                     >
                       <span>{srv.name}</span>
-                      {selectedServicesList.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleServiceSelection(srv.id);
-                          }}
-                          className="text-neutral-400 hover:text-red-400 ml-0.5"
-                        >
-                          ×
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleServiceSelection(srv.id);
+                        }}
+                        className="text-neutral-400 hover:text-red-400 ml-0.5 cursor-pointer"
+                        title="Deseleccionar servicio"
+                      >
+                        ×
+                      </button>
                     </span>
                   ))}
                 </div>
@@ -875,17 +876,21 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 <span>3. Horario & Asignación de Especialista por Servicio (Atención Simultánea)</span>
               </h4>
               <span className="text-[10px] text-neutral-400 font-mono">
-                Estadía máxima: {totalDurationMinutes} min (Fin: {calculatedEndTime})
+                {scheduledServices.length > 0
+                  ? `Estadía máxima: ${totalDurationMinutes} min (Fin: ${calculatedEndTime})`
+                  : 'Sin servicios seleccionados'}
               </span>
             </div>
 
             {/* Banner explicativo de atención simultánea */}
-            <div className="p-2.5 rounded-xl bg-[#C8A45C]/10 border border-[#C8A45C]/30 text-[#E6C875] text-[11px] flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#C8A45C]" />
-              <span>
-                <strong>Atención en Paralelo:</strong> Todos los servicios inician a las <strong>{startTime}</strong> de forma simultánea, atendidos por su respectivo especialista. La estadía del cliente equivale al servicio que más demore ({totalDurationMinutes} min).
-              </span>
-            </div>
+            {scheduledServices.length > 0 && (
+              <div className="p-2.5 rounded-xl bg-[#C8A45C]/10 border border-[#C8A45C]/30 text-[#E6C875] text-[11px] flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#C8A45C]" />
+                <span>
+                  <strong>Atención en Paralelo:</strong> Todos los servicios inician a las <strong>{startTime}</strong> de forma simultánea, atendidos por su respectivo especialista. La estadía del cliente equivale al servicio que más demore ({totalDurationMinutes} min).
+                </span>
+              </div>
+            )}
 
             {/* Fecha y Hora de Inicio General */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1013,7 +1018,12 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                 </span>
               </div>
 
-              {scheduledServices.map((item) => {
+              {scheduledServices.length === 0 ? (
+                <div className="p-4 rounded-xl border border-dashed border-neutral-800 bg-[#121212] text-center text-xs text-neutral-400">
+                  No hay servicios seleccionados. Selecciona al menos un servicio en la sección anterior para asignar especialistas y configurar el horario.
+                </div>
+              ) : (
+                scheduledServices.map((item) => {
                 const srv = item.service;
                 const assignedEmp = getEffectiveEmployeeForService(srv.id);
                 const availStatus = getServiceAvailability(item, assignedEmp);
@@ -1195,7 +1205,7 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                     )}
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
 
@@ -1495,7 +1505,9 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
               <div>
                 Especialista{scheduledServices.length > 1 ? 's' : ''}:{' '}
                 <strong className="text-[#E6C875]">
-                  {scheduledServices.length === 1
+                  {scheduledServices.length === 0
+                    ? 'Ningún servicio seleccionado'
+                    : scheduledServices.length === 1
                     ? (getEffectiveEmployeeForService(scheduledServices[0]?.service.id)?.full_name || 'Sin asignar')
                     : scheduledServices.map((item) => {
                         const emp = getEffectiveEmployeeForService(item.service.id);
@@ -1503,9 +1515,13 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
                       }).join(' · ')
                   }
                 </strong>
-                {' · '}
-                Horario Simultáneo: <strong className="text-white font-mono">{startTime} a {calculatedEndTime}</strong>
-                <span className="text-neutral-500 font-mono text-[10px]"> (Estadía máx: {totalDurationMinutes} min)</span>
+                {scheduledServices.length > 0 && (
+                  <>
+                    {' · '}
+                    Horario Simultáneo: <strong className="text-white font-mono">{startTime} a {calculatedEndTime}</strong>
+                    <span className="text-neutral-500 font-mono text-[10px]"> (Estadía máx: {totalDurationMinutes} min)</span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1521,12 +1537,13 @@ export const NewBookingModal: React.FC<NewBookingModalProps> = ({
 
               <button
                 type="submit"
-                disabled={!canSubmit || isSubmitting}
-                className={`flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
-                  canSubmit && !isSubmitting
-                    ? 'bg-gradient-to-r from-[#D4AF37] to-[#C8A45C] text-black hover:brightness-110 shadow-[0_4px_20px_rgba(200,164,92,0.3)]'
+                disabled={selectedServiceIds.length === 0 || !canSubmit || isSubmitting}
+                className={`flex-1 sm:flex-initial px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg ${
+                  selectedServiceIds.length > 0 && canSubmit && !isSubmitting
+                    ? 'bg-gradient-to-r from-[#D4AF37] to-[#C8A45C] text-black hover:brightness-110 shadow-[0_4px_20px_rgba(200,164,92,0.3)] cursor-pointer'
                     : 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700/50'
                 }`}
+                title={selectedServiceIds.length === 0 ? 'Debe seleccionar al menos un servicio' : undefined}
               >
                 <Plus className="w-4 h-4" />
                 <span>{isSubmitting ? 'Guardando Reserva...' : 'Confirmar y Crear Cita'}</span>
